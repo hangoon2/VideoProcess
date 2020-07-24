@@ -61,6 +61,14 @@ bool OnReadEx(ClientObject* pClient, char* pRcvData, int len) {
     return false;
 }
 
+bool DoMirrorCallback(void* pMirroringPacket) {
+    return true;
+}
+
+void DoMirrorStoppedCallback(int nHpNo, int nStopCode) {
+
+}
+
 NetManager::NetManager() {
     printf("Call NetManager Constructor\n");
 
@@ -225,6 +233,7 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
             printf("[VPS:%d] Start Command 명령 받음: LCD Width=%d, Height=%d\n", nHpNo, sVarHor, sVarVer);
 
             // start mirroring
+            m_mirror.StartMirroring(nHpNo, DoMirrorCallback, DoMirrorStoppedCallback);
         }
         break;
 
@@ -232,6 +241,9 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
             m_isOnService[nHpNo - 1] = false;
 
             printf("[VPS:%d] Stop Command 명령 받음\n", nHpNo);
+
+            // test code
+            m_mirror.StopMirroring(nHpNo);
         }
         break;
     }

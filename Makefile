@@ -4,7 +4,7 @@ CPPFLAGS=--std=c++11
 OPENCV_FLAGS=`pkg-config opencv4 --cflags`
 INC=-I $(JAVA_HOME)/include -I $(JAVA_HOME)/include/darwin -I /usr/local/include/opencv4
 LDLIBS=-lopencv_core -lopencv_imgcodecs -lopencv_imgproc
-OBJS=main.o NetManager.o AsyncMediaServerSocket.o ClientObject.o ClientList.o
+OBJS=main.o NetManager.o AsyncMediaServerSocket.o ClientObject.o ClientList.o Mirroring.o MIR_Client.o
 
 $(TARGET): $(OBJS)
 	$(CC) -o $@ $(OBJS)
@@ -27,6 +27,9 @@ ClientList.o: network/ClientList.cpp
 
 Mirroring.o: mirroring/Mirroring.cpp
 	$(CC) -c mirroring/Mirroring.cpp $(CPPFLAGS)
+
+MIR_Client.o: mirroring/MIR_Client.cpp
+	$(CC) -c mirroring/MIR_Client.cpp $(CPPFLAGS)
 
 clean:
 	rm -f $(TARGET)

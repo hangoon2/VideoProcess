@@ -2,6 +2,7 @@
 #define NET_MANAGER_H
 
 #include "AsyncMediaServerSocket.h"
+#include "../mirroring/Mirroring.h"
 
 class NetManager {
 public:
@@ -17,6 +18,8 @@ private:
 
 private:
     AsyncMediaServerSocket m_VPSSvr;
+
+    Mirroring m_mirror;
 
     bool m_isOnService[MAXCHCNT];
 };
