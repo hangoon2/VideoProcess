@@ -1,0 +1,10 @@
+vps
+common/VPSCommon.h
+network/AsyncMediaServerSocket.cpp
+network/AsyncMediaServerSocket.h
+network/ClientList.cpp
+network/ClientList.h
+network/ClientObject.cpp
+network/ClientObject.h
+network/NetManager.cpp
+network/NetManager.h
