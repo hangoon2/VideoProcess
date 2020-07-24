@@ -83,7 +83,7 @@ void NetManager::OnServerModeStart() {
 }
 
 bool NetManager::OnReadEx(ClientObject* pClient, char* pRcvData, int len) {
-    printf("NetManager::OnReadEx Socket(%d) ----> %d\n", pClient->m_clientSock, len);
+//    printf("NetManager::OnReadEx Socket(%d) ----> %d\n", pClient->m_clientSock, len);
     if(pRcvData[0] == CMD_START_CODE && pClient->m_rcvCommandBuffer[0] != CMD_START_CODE) {
         memcpy(pClient->m_rcvCommandBuffer, pRcvData, len);
         pClient->m_rcvPos = len;
@@ -134,6 +134,10 @@ bool NetManager::OnReadEx(ClientObject* pClient, char* pRcvData, int len) {
     }
 
     return ret;
+}
+
+bool NetManager::CloseClient(ClientObject* pClient) {
+    return m_VPSSvr.OnClose(pClient->m_clientSock);
 }
 
 bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, int len) {
@@ -199,7 +203,16 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
         break;
 
         case CMD_PLAYER_EXIT: {
+            printf("[VPS:%d] Received PLAYER EXIT\n", nHpNo);
+            pClient->m_isExitCommandReceived = true;
 
+            int nClientType = pClient->m_nClientType;
+
+            CloseClient(pClient);   // ClientObject 객체 삭제됨
+
+            if(nClientType == CLIENT_TYPE_GUEST) {
+
+            }
         }
         break;
 
@@ -209,14 +222,16 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
 
             m_isOnService[nHpNo - 1] = true;
 
-            printf("Start Command 명령 받음: LCD Width=%d, Height=%d\n", sVarHor, sVarVer);
+            printf("[VPS:%d] Start Command 명령 받음: LCD Width=%d, Height=%d\n", nHpNo, sVarHor, sVarVer);
 
             // start mirroring
         }
         break;
 
         case CMD_STOP: {
+            m_isOnService[nHpNo - 1] = false;
 
+            printf("[VPS:%d] Stop Command 명령 받음\n", nHpNo);
         }
         break;
     }

@@ -17,13 +17,16 @@ ClientObject::ClientObject() {
 
     m_nHpNo = 0;
     m_nClientType = CLIENT_TYPE_UNKNOWN;
+
+    m_isExitCommandReceived = false;
 }
 
 ClientObject::~ClientObject() {
     printf("Call ClientObject Destructor\n");
-    
-    delete [] m_rcvCommandBuffer;
-
     printf("Socket %d closed\n", m_clientSock);
     close(m_clientSock);
+
+    m_clientSock = INVALID_SOCKET;
+    
+    delete [] m_rcvCommandBuffer;
 }

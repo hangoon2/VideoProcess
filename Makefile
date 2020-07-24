@@ -25,5 +25,8 @@ ClientObject.o: network/ClientObject.cpp
 ClientList.o: network/ClientList.cpp
 	$(CC) -c network/ClientList.cpp $(CPPFLAGS)
 
+Mirroring.o: mirroring/Mirroring.cpp
+	$(CC) -c mirroring/Mirroring.cpp $(CPPFLAGS)
+
 clean:
 	rm -f $(TARGET)

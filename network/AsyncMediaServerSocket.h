@@ -13,13 +13,14 @@ public:
     ~AsyncMediaServerSocket();
 
     int InitSocket(int port, PDATA_READ_ROUTINE pOnReadEx);
+
+    bool OnClose(Socket sock);
     
 private:
     void SetNonBlock(Socket sock);
     void UpdateEvents(int efd, Socket sock, int events, bool modify);
     void OnAccept(int efd, ServerSocket serverSock);
     void OnRead(int efd, Socket sock);
-    void OnClose(Socket sock);
     void OnServerEvent(int efd, ServerSocket serverSock, int waitms);
 
 private:

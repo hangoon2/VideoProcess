@@ -29,6 +29,8 @@ public:
 
     int m_nHpNo;
     int m_nClientType;
+
+    bool m_isExitCommandReceived;
 };
 
 #endif

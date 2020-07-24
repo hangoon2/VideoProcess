@@ -12,6 +12,7 @@ public:
     bool OnReadEx(ClientObject* pClient, char* pRcvData, int len);
 
 private:
+    bool CloseClient(ClientObject* pClient);
     bool WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, int len);
 
 private:

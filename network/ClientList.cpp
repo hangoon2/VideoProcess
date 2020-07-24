@@ -22,5 +22,14 @@ void ClientList::Insert(Socket sock, ClientObject* pClient) {
 }
 
 ClientObject* ClientList::Find(Socket sock) {
-    return m_clientMap.find(sock)->second;
+    auto it = m_clientMap.find(sock);
+    if(it == m_clientMap.end()) {
+        return NULL;
+    }
+
+    return it->second;
+}
+
+void ClientList::Delete(Socket sock) {
+    m_clientMap.erase(sock);
 }

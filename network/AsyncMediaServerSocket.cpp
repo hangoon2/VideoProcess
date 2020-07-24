@@ -11,7 +11,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-#define exit_if(r, ...) if(r) {printf(__VA_ARGS__); printf("error no: %d error msg %s\n", errno, strerror(errno)); exit(1);}
+#define exit_if(r, ...) if(r) {printf(__VA_ARGS__); printf("\nerror no: %d error msg %s\n", errno, strerror(errno)); exit(1);}
 
 const int kReadEvent = 1;
 const int kWriteEvent = 2;
@@ -76,8 +76,6 @@ void AsyncMediaServerSocket::OnAccept(int efd, ServerSocket serverSock) {
     pClient->m_clientSock = clientSock;
     strcpy( pClient->m_strIPAddr, inet_ntoa(raddr.sin_addr) );
 
-    printf("accept a connection from %s\n", pClient->m_strIPAddr);
-
     m_clientList.Insert(clientSock, pClient);
 }
 
@@ -86,30 +84,32 @@ void AsyncMediaServerSocket::OnRead(int efd, Socket sock) {
     int n = 0; 
 
     while( (n = ::read(sock, buf, sizeof buf)) > 0 ) {
-        //printf("fd %d read %d bytes\n", sock, n);
-        
         if(m_pOnReadEx != NULL) {
             m_pOnReadEx( m_clientList.Find(sock), buf, n );
         }
-
-        ::write(sock, buf, n);
     }
 
     if( n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK) ) {
         return;
     }
 
-    exit_if(n < 0, "read error");
+//    exit_if(n < 0, "read error");
     
     OnClose(sock);
 }
 
-void AsyncMediaServerSocket::OnClose(Socket sock) {
+bool AsyncMediaServerSocket::OnClose(Socket sock) {
     ClientObject* pClient = m_clientList.Find(sock);
-    if(pClient != NULL) {
+    if(pClient != NULL && pClient->m_clientSock != INVALID_SOCKET) {
+        m_clientList.Delete(sock);
+
         delete pClient;
         pClient = NULL;
+
+        return true;
     }
+
+    return false;
 }
 
 void AsyncMediaServerSocket::OnServerEvent(int efd, ServerSocket serverSock, int waitms) {

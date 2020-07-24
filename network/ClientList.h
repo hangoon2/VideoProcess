@@ -16,6 +16,7 @@ public:
     void Clear();
     void Insert(Socket sock, ClientObject* pClient);
     ClientObject* Find(Socket sock);
+    void Delete(Socket sock);
 
 private:
     map<Socket, ClientObject*> m_clientMap;
