@@ -72,13 +72,13 @@ void AsyncMediaServerSocket::OnAccept(int efd, ServerSocket serverSock) {
     SetNonBlock(clientSock);
     UpdateEvents(efd, clientSock, kReadEvent, false);
 
-    ClientObject* pObject = new ClientObject();
-    pObject->m_clientSock = clientSock;
-    strcpy( pObject->m_strIPAddr, inet_ntoa(raddr.sin_addr) );
+    ClientObject* pClient = new ClientObject();
+    pClient->m_clientSock = clientSock;
+    strcpy( pClient->m_strIPAddr, inet_ntoa(raddr.sin_addr) );
 
-    printf("accept a connection from %s\n", pObject->m_strIPAddr);
+    printf("accept a connection from %s\n", pClient->m_strIPAddr);
 
-    m_clientList.Insert(clientSock, pObject);
+    m_clientList.Insert(clientSock, pClient);
 }
 
 void AsyncMediaServerSocket::OnRead(int efd, Socket sock) {
@@ -92,7 +92,7 @@ void AsyncMediaServerSocket::OnRead(int efd, Socket sock) {
             m_pOnReadEx( m_clientList.Find(sock), buf, n );
         }
 
-//        ::write(sock, buf, n);
+        ::write(sock, buf, n);
     }
 
     if( n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK) ) {
@@ -105,10 +105,10 @@ void AsyncMediaServerSocket::OnRead(int efd, Socket sock) {
 }
 
 void AsyncMediaServerSocket::OnClose(Socket sock) {
-    ClientObject* pObject = m_clientList.Find(sock);
-    if(pObject != NULL) {
-        delete pObject;
-        pObject = NULL;
+    ClientObject* pClient = m_clientList.Find(sock);
+    if(pClient != NULL) {
+        delete pClient;
+        pClient = NULL;
     }
 }
 

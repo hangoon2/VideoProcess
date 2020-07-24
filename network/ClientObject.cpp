@@ -14,6 +14,9 @@ ClientObject::ClientObject() {
 
     memset( m_strID, 0x00, sizeof(m_strID) );
     memset( m_strIPAddr, 0x00, sizeof(m_strIPAddr) );
+
+    m_nHpNo = 0;
+    m_nClientType = CLIENT_TYPE_UNKNOWN;
 }
 
 ClientObject::~ClientObject() {

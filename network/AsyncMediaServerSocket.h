@@ -5,7 +5,7 @@
 #include "ClientObject.h"
 #include "ClientList.h"
 
-typedef bool (*PDATA_READ_ROUTINE)(ClientObject* pObject, char* pData, int len);
+typedef bool (*PDATA_READ_ROUTINE)(ClientObject* pClient, char* pRcvData, int len);
 
 class AsyncMediaServerSocket {
 public:

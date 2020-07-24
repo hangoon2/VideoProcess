@@ -14,7 +14,7 @@ public:
     virtual ~ClientList();
 
     void Clear();
-    void Insert(Socket sock, ClientObject* pObject);
+    void Insert(Socket sock, ClientObject* pClient);
     ClientObject* Find(Socket sock);
 
 private:

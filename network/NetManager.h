@@ -9,13 +9,15 @@ public:
     ~NetManager();
 
     void OnServerModeStart();
-    bool OnReadEx(ClientObject* pObject, char* pData, int len);
+    bool OnReadEx(ClientObject* pClient, char* pRcvData, int len);
 
 private:
-    bool WebCommandDataParsing2(ClientObject* pObject, char* pData, int len);
+    bool WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, int len);
 
 private:
     AsyncMediaServerSocket m_VPSSvr;
+
+    bool m_isOnService[MAXCHCNT];
 };
 
 #endif

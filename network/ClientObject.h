@@ -3,7 +3,8 @@
 
 #include "../common/VPSCommon.h"
 
-#define RECV_BUFFER_SIZE    1024 * 1024
+#define RECV_BUFFER_SIZE        1024 * 1024
+#define DEFAULT_STRING_SIZE     128
 
 enum {
     CLIENT_TYPE_UNKNOWN,
@@ -23,8 +24,11 @@ public:
     char* m_rcvCommandBuffer;
     int m_rcvPos;
 
-    char m_strID[64];
-    char m_strIPAddr[64];
+    char m_strID[DEFAULT_STRING_SIZE];
+    char m_strIPAddr[DEFAULT_STRING_SIZE];
+
+    int m_nHpNo;
+    int m_nClientType;
 };
 
 #endif

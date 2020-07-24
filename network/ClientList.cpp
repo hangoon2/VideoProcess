@@ -10,15 +10,15 @@ ClientList::~ClientList() {
 
 void ClientList::Clear() {
     for(auto it = m_clientMap.begin(); it != m_clientMap.end(); it++) {
-        ClientObject* pObject = it->second;
+        ClientObject* pClient = it->second;
         
-        delete pObject;
-        pObject = NULL;
+        delete pClient;
+        pClient = NULL;
     }
 }
 
-void ClientList::Insert(Socket sock, ClientObject* pObject) {
-    m_clientMap.insert(pair<Socket, ClientObject*>(sock, pObject));
+void ClientList::Insert(Socket sock, ClientObject* pClient) {
+    m_clientMap.insert(pair<Socket, ClientObject*>(sock, pClient));
 }
 
 ClientObject* ClientList::Find(Socket sock) {
