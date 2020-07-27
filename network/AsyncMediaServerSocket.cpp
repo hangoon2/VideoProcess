@@ -60,11 +60,13 @@ void AsyncMediaServerSocket::UpdateEvents(int efd, Socket sock, int events, bool
 
 void AsyncMediaServerSocket::OnAccept(int efd, ServerSocket serverSock) {
     struct sockaddr_in raddr;
+    memset( &raddr, 0x00, sizeof(raddr) );
     socklen_t rsz = sizeof(raddr);
     Socket clientSock = accept(serverSock, (struct sockaddr *)&raddr, &rsz);
     exit_if(clientSock < 0, "accept failed");
 
-    sockaddr_in peer;
+    struct sockaddr_in peer;
+    memset( &peer, 0x00, sizeof(peer) );
     socklen_t alen = sizeof(peer);
     int r = getpeername(clientSock, (sockaddr *)&peer,  &alen);
     exit_if(r < 0, "getpeername failed");
@@ -110,6 +112,15 @@ bool AsyncMediaServerSocket::OnClose(Socket sock) {
     }
 
     return false;
+}
+
+bool AsyncMediaServerSocket::OnSend(int nHpNo, Socket sock, ONYPACKET_UINT8* pData, int iLen, bool force) {
+    int ret = (int)write(sock, pData, iLen);
+    if(ret != iLen) {
+        return false;
+    }
+
+    return true;
 }
 
 void AsyncMediaServerSocket::OnServerEvent(int efd, ServerSocket serverSock, int waitms) {
@@ -170,4 +181,8 @@ int AsyncMediaServerSocket::InitSocket(int port, PDATA_READ_ROUTINE pOnReadEx) {
     }
 
     return 0;
+}
+
+ClientObject* AsyncMediaServerSocket::FindHost(int nHpNo) {
+    return m_clientList.FindHost(nHpNo);
 }

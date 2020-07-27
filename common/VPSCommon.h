@@ -13,6 +13,12 @@ typedef int ServerSocket;
 #define CMD_HEAD_SIZE   8
 #define CMD_TAIL_SIZE   3
 
+typedef unsigned char   ONYPACKET_UINT8;
+typedef unsigned short  ONYPACKET_UINT16;
+typedef int             ONYPACKET_INT;
+typedef long            ONYPACKET_INT32;
+typedef long long       ONYPACKET_INT64;
+
 #define MOBILE_CONTROLL_ID  "MOBILECONTROL"
 
 /* command code */
@@ -31,5 +37,9 @@ typedef int ServerSocket;
 #define CMD_JPG_DEV_HORI_IMG_HORI   20005
 #define CMD_JPG_DEV_VERT_IMG_HORI   20006
 #define CMD_JPG_DEV_HORI_IMG_VERT   20007
+
+#define CMD_MIRRORING_JPEG_CAPTURE_FAILED   32401
+
+#define CMD_ON_OFF          21002
 
 #endif

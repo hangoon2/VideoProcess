@@ -33,3 +33,14 @@ ClientObject* ClientList::Find(Socket sock) {
 void ClientList::Delete(Socket sock) {
     m_clientMap.erase(sock);
 }
+
+ClientObject* ClientList::FindHost(int nHpNo) {
+    for(auto it = m_clientMap.begin(); it != m_clientMap.end(); it++) {
+        ClientObject* pClient = it->second;
+        if(pClient->m_nHpNo == nHpNo && pClient->m_nClientType == CLIENT_TYPE_HOST) {
+            return pClient;
+        }        
+    }
+
+    return NULL;
+}

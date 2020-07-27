@@ -1,11 +1,7 @@
 #ifndef MIRRORING_H
 #define MIRRORING_H
 
-#include "../common/VPSCommon.h"
 #include "MIR_Client.h"
-
-typedef bool (*PMIRRORING_ROUTINE)(void* pMirroringPacket);
-typedef void (*PMIRRORING_STOP_ROUTINE)(int nHpNo, int nStopCode);
 
 class Mirroring {
 public:
@@ -14,6 +10,10 @@ public:
 
     bool StartMirroring(int nHpNo, PMIRRORING_ROUTINE pMirroringRoutine, PMIRRORING_STOP_ROUTINE pMirroringStopRoutine);
     void StopMirroring(int nHpNo);
+
+    void HandleJpegPacket(ONYPACKET_UINT8* pPacket, int iDataLen, short usCmd, int nHpNo);
+    void HandleJpegCaptureFailedPacket(ONYPACKET_UINT8* pPacket, int iDataLen, short usCmd, int nHpNo);
+    void OnMirrorStopped(int nHpNo, int nStopCode);
 
 private:
     PMIRRORING_ROUTINE m_pMirroringRoutine[MAXCHCNT];

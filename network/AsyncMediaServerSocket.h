@@ -13,8 +13,10 @@ public:
     ~AsyncMediaServerSocket();
 
     int InitSocket(int port, PDATA_READ_ROUTINE pOnReadEx);
-
     bool OnClose(Socket sock);
+    bool OnSend(int nHpNo, Socket sock, ONYPACKET_UINT8* pData, int iLen, bool force);
+
+    ClientObject* FindHost(int nHpNo);
     
 private:
     void SetNonBlock(Socket sock);

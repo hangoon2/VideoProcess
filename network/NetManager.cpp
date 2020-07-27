@@ -62,11 +62,15 @@ bool OnReadEx(ClientObject* pClient, char* pRcvData, int len) {
 }
 
 bool DoMirrorCallback(void* pMirroringPacket) {
-    return true;
+    if(pNetMgr != NULL) {
+        pNetMgr->BypassPacket(pMirroringPacket);
+    }
+
+    return false;
 }
 
 void DoMirrorStoppedCallback(int nHpNo, int nStopCode) {
-
+    printf("MIRRONG THREAD[%d] STOPPED : %d\n", nHpNo, nStopCode);
 }
 
 NetManager::NetManager() {
@@ -88,6 +92,18 @@ void NetManager::OnServerModeStart() {
     if(server <= 0) {
         printf("Media Server Socket 생성 실패\n");
     }
+}
+
+bool NetManager::BypassPacket(void* pMirroringPacket) {
+    ONYPACKET_UINT8* pPacket = (ONYPACKET_UINT8*)pMirroringPacket;
+
+    int iDataLen = ntohl( *(uint32_t*)&pPacket[1] );
+    short usCmd = ntohs( *(short*)&pPacket[5] );
+    int nHpNo = *(&pPacket[7]);
+
+//    printf("MIRRORING CALLBACK[%d] ... %d, %d\n", nHpNo, usCmd, iDataLen);
+
+    return SendToClient(usCmd, nHpNo, pPacket, CMD_HEAD_SIZE + iDataLen + CMD_TAIL_SIZE, false);
 }
 
 bool NetManager::OnReadEx(ClientObject* pClient, char* pRcvData, int len) {
@@ -142,6 +158,15 @@ bool NetManager::OnReadEx(ClientObject* pClient, char* pRcvData, int len) {
     }
 
     return ret;
+}
+
+bool NetManager::SendToClient(short usCmd, int nHpNo, ONYPACKET_UINT8* pData, int iLen, int iKeyFrameNo) {
+    ClientObject* pClient = m_VPSSvr.FindHost(nHpNo);
+    if(pClient != NULL) {
+        return m_VPSSvr.OnSend(nHpNo, pClient->m_clientSock, pData, iLen, true);
+    }
+
+    return false;
 }
 
 bool NetManager::CloseClient(ClientObject* pClient) {

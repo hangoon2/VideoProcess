@@ -18,6 +18,8 @@ public:
     ClientObject* Find(Socket sock);
     void Delete(Socket sock);
 
+    ClientObject* FindHost(int nHpNo);
+
 private:
     map<Socket, ClientObject*> m_clientMap;
 };

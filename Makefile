@@ -7,7 +7,7 @@ LDLIBS=-lopencv_core -lopencv_imgcodecs -lopencv_imgproc
 OBJS=main.o NetManager.o AsyncMediaServerSocket.o ClientObject.o ClientList.o Mirroring.o MIR_Client.o
 
 $(TARGET): $(OBJS)
-	$(CC) -o $@ $(OBJS)
+	$(CC) -o $@ $(OBJS) -lpthread
 	rm -f *.o
 
 main.o: main.cpp
