@@ -1,7 +1,8 @@
 #ifndef VPS_COMMON_H
 #define VPS_COMMON_H
 
-#define MAXCHCNT    10
+#define MAXCHCNT            10
+#define MAXCLIENT_PER_CH    21  // Host(1) + Guest(20) = 21
 
 #define INVALID_SOCKET 0L
 
@@ -33,6 +34,8 @@ typedef long long       ONYPACKET_INT64;
 #define CMD_PLAYER_FPS      30002
 #define CMD_PLAYER_EXIT     30010
 
+#define CMD_JPG_LANDSCAPE           20001
+#define CMD_JPG_PORTRAIT            20002
 #define CMD_JPG_DEV_VERT_IMG_VERT   20004
 #define CMD_JPG_DEV_HORI_IMG_HORI   20005
 #define CMD_JPG_DEV_VERT_IMG_HORI   20006
@@ -40,6 +43,17 @@ typedef long long       ONYPACKET_INT64;
 
 #define CMD_MIRRORING_JPEG_CAPTURE_FAILED   32401
 
+#define CMD_VERTICAL        1003
+#define CMD_HORIZONTAL      1004
+
 #define CMD_ON_OFF          21002
+#define CMD_KEY_FRAME       21003
+
+#define CMD_ACK             10001
+#define CMD_LOGCAT          10003
+
+#define CMD_RESOURCE_USAGE_NETWORK  16
+#define CMD_RESOURCE_USAGE_CPU      17
+#define CMD_RESOURCE_USAGE_MEMORY   18
 
 #endif

@@ -79,6 +79,10 @@ void AsyncMediaServerSocket::OnAccept(int efd, ServerSocket serverSock) {
     strcpy( pClient->m_strIPAddr, inet_ntoa(raddr.sin_addr) );
 
     m_clientList.Insert(clientSock, pClient);
+
+    printf("Accept : %s\n", pClient->m_strIPAddr);
+
+    //write( clientSock, "connect server", sizeof("connect server") );
 }
 
 void AsyncMediaServerSocket::OnRead(int efd, Socket sock) {
@@ -185,4 +189,16 @@ int AsyncMediaServerSocket::InitSocket(int port, PDATA_READ_ROUTINE pOnReadEx) {
 
 ClientObject* AsyncMediaServerSocket::FindHost(int nHpNo) {
     return m_clientList.FindHost(nHpNo);
+}
+
+ClientObject* AsyncMediaServerSocket::FindUnknown() {
+    return m_clientList.FindUnknown();
+}
+
+void AsyncMediaServerSocket::AddClientList(ClientObject* pClient) {
+    m_clientList.InsertClient(pClient);
+}
+
+ClientObject** AsyncMediaServerSocket::GetClientList(int nHpNo) {
+    return m_clientList.GetClientList(nHpNo);
 }

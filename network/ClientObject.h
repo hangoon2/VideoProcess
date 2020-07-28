@@ -3,6 +3,8 @@
 
 #include "../common/VPSCommon.h"
 
+#include <pthread.h>
+
 #define RECV_BUFFER_SIZE        1024 * 1024
 #define DEFAULT_STRING_SIZE     128
 
@@ -31,6 +33,14 @@ public:
     int m_nClientType;
 
     bool m_isExitCommandReceived;
+
+    bool m_isFirstImage;
+
+    void Lock();
+    void Unlock();
+
+private:
+    pthread_mutex_t m_lock;
 };
 
 #endif

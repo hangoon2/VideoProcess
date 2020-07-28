@@ -19,9 +19,19 @@ public:
     void Delete(Socket sock);
 
     ClientObject* FindHost(int nHpNo);
+    ClientObject* FindUnknown();
+
+    void InsertClient(ClientObject* pClient);
+    
+    ClientObject** GetClientList(int nHpNo);
+
+private:
+    void DeleteClient(ClientObject* pClient);
 
 private:
     map<Socket, ClientObject*> m_clientMap;
+
+    ClientObject* m_clientList[MAXCHCNT][MAXCLIENT_PER_CH];
 };
 
 #endif

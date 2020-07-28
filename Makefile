@@ -2,12 +2,12 @@ CC=g++
 TARGET=vps
 CPPFLAGS=--std=c++11
 OPENCV_FLAGS=`pkg-config opencv4 --cflags`
-INC=-I $(JAVA_HOME)/include -I $(JAVA_HOME)/include/darwin -I /usr/local/include/opencv4
-LDLIBS=-lopencv_core -lopencv_imgcodecs -lopencv_imgproc
-OBJS=main.o NetManager.o AsyncMediaServerSocket.o ClientObject.o ClientList.o Mirroring.o MIR_Client.o
+INC=-I /usr/local/include/opencv4
+LDLIBS=-lopencv_core -lopencv_imgcodecs -lopencv_imgproc -lpthread
+OBJS=main.o NetManager.o AsyncMediaServerSocket.o ClientObject.o ClientList.o Mirroring.o MIR_Client.o MirrorCommon.o VPSJpeg.o
 
 $(TARGET): $(OBJS)
-	$(CC) -o $@ $(OBJS) -lpthread
+	$(CC) -o $@ $(OBJS) $(LDLIBS)
 	rm -f *.o
 
 main.o: main.cpp
@@ -30,6 +30,12 @@ Mirroring.o: mirroring/Mirroring.cpp
 
 MIR_Client.o: mirroring/MIR_Client.cpp
 	$(CC) -c mirroring/MIR_Client.cpp $(CPPFLAGS)
+
+MirrorCommon.o: mirroring/MirrorCommon.cpp
+	$(CC) -c mirroring/MirrorCommon.cpp $(CPPFLAGS)
+
+VPSJpeg.o: mirroring/VPSJpeg.cpp
+	$(CC) -c mirroring/VPSJpeg.cpp $(CPPFLAGS) $(OPENCV_FLAGS) $(INC)
 
 clean:
 	rm -f $(TARGET)

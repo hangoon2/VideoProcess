@@ -1,4 +1,5 @@
 #include "MIR_Client.h"
+#include "MirrorCommon.h"
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -10,6 +11,9 @@
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
+#include <algorithm>
+
+using namespace std;
 
 const int kReadEvent = 1;
 
@@ -23,27 +27,6 @@ bool SetNonBlock(Socket sock) {
     }
 
     return false;
-}
-
-ONYPACKET_UINT16 calChecksum(unsigned short* ptr, int nbytes) {
-    ONYPACKET_INT32 sum;
-    ONYPACKET_UINT16 answer;
-
-    sum =0;
-    while(nbytes > 1) {
-        sum += *ptr++;
-        nbytes -= 2;
-    }
-
-    if(nbytes == 1) {
-        sum += *(ONYPACKET_UINT8*)ptr;
-    }
-
-    sum = (sum >> 16) + (sum & 0xffff);
-    sum += (sum >> 16);
-    answer = ~sum;
-
-    return answer;
 }
 
 void* ThreadFunc(void* pArg) {
@@ -216,13 +199,18 @@ MIR_Client::MIR_Client() {
     m_mirrorSocket = INVALID_SOCKET;
     m_controlSocket = INVALID_SOCKET;
 
-    m_nOffset = 0;
-    m_nCurrReadSize = 0;
-    m_nReadBufSize = 0;
-    m_isHeadOfFrame = true;
-    m_isFirstImage = true;
+    // m_nOffset = 0;
+    // m_nCurrReadSize = 0;
+    // m_nReadBufSize = 0;
+    // m_isHeadOfFrame = true;
+    // m_isFirstImage = true;
 
     m_pRcvBuf = NULL;
+
+    m_pos = 0;
+    //m_iWrite = 0;
+    m_rxStreamOrder = RX_PACKET_POS_START;
+    m_dataSize = 0;
 }
 
 MIR_Client::~MIR_Client() {
@@ -257,6 +245,7 @@ bool MIR_Client::StartRunClientThread(int nHpNo, int nMirroringPort, int nContro
         }
     } else {
         // send key frame
+        SendKeyFramePacket(nHpNo);
 
         printf("THREAD IS RUNNING\n");
     }
@@ -368,6 +357,59 @@ int MIR_Client::SendOnOffPacket(bool onoff) {
     return 0;
 }
 
+int MIR_Client::SendKeyFramePacket(int nHpNo) {
+    if(m_controlSocket != INVALID_SOCKET) {
+        int size = 0;
+        ONYPACKET_UINT8* ptrData = MakeOnyPacketKeyFrame(m_nHpNo, size);
+        if(size != 0) {
+            return SendToControlSocket((const char*)ptrData, size);
+        }
+    }
+
+    return 0;
+}
+
+ONYPACKET_UINT8* MIR_Client::MakeOnyPacketKeyFrame(int nHpNo, int& size) {
+    int dataSum = 0;
+    int sizeofData = 0;
+
+    memset(m_sendBuf, 0x00, SEND_BUF_SIZE);
+
+    ONYPACKET_UINT8 mStartFlag = CMD_START_CODE;
+    sizeofData = sizeof(mStartFlag);
+    memcpy(m_sendBuf, (char*)&mStartFlag, sizeofData);
+    dataSum = sizeofData;
+
+    ONYPACKET_INT mDataSize = htonl(0);
+    sizeofData = sizeof(mDataSize);
+    memcpy(m_sendBuf + dataSum, (char*)&mDataSize, sizeofData);
+    dataSum += sizeofData;
+
+    ONYPACKET_UINT16 mCommandCode = htons(CMD_KEY_FRAME);
+    sizeofData = sizeof(mCommandCode);
+    memcpy(m_sendBuf + dataSum, (char*)&mCommandCode, sizeofData);
+    dataSum += sizeofData;
+
+    ONYPACKET_UINT8 mDeviceNo = (ONYPACKET_UINT8)nHpNo;
+    sizeofData = sizeof(mDeviceNo);
+    memcpy(m_sendBuf + dataSum, (char*)&mDeviceNo, sizeofData);
+    dataSum += sizeofData;
+
+    ONYPACKET_UINT16 mChecksum = htons( calChecksum((ONYPACKET_UINT16*)(m_sendBuf + 1), ntohl(mDataSize) + CMD_HEAD_SIZE - 1) );
+    sizeofData = sizeof(mChecksum);
+    memcpy(m_sendBuf + dataSum, (char*)&mChecksum, sizeofData);
+    dataSum += sizeofData;
+
+    ONYPACKET_UINT8 mEndFlag = CMD_END_CODE;
+    sizeofData = sizeof(mEndFlag);
+    memcpy(m_sendBuf + dataSum, (char*)&mEndFlag, sizeofData);
+    dataSum += sizeofData;
+
+    size = dataSum;
+
+    return m_sendBuf;
+}
+
 ONYPACKET_UINT8* MIR_Client::MakeOnyPacketOnOff(int nHpNo, bool onoff, int& size) {
     int dataSum = 0;
     int sizeofData = 0;
@@ -433,62 +475,124 @@ bool MIR_Client::GetData(int efd, Socket sock, int waitms) {
             while( (n = ::read(sock, buf, sizeof buf)) > 0 ) {
 //                printf("[VPS:1] On Read Data : %d\n", n);
 
-                if(m_isHeadOfFrame) {
-                    memcpy(m_pRcvBuf + m_nOffset, buf, n);
-                    m_nCurrReadSize = n;
-                    m_nOffset += m_nCurrReadSize;
-
-                    if(m_nOffset >= CMD_HEAD_SIZE) {
-                        int dataSize = ntohl( *((__int32_t*)(m_pRcvBuf + 1)) );
-
-                        m_nReadBufSize = dataSize - (m_nOffset - CMD_HEAD_SIZE) + CMD_TAIL_SIZE;
-                        m_isHeadOfFrame = false;
+                int idx = 0;
+                int iWrite = 0;
+                while(idx < n) {
+                    if(m_rxStreamOrder == RX_PACKET_POS_START) {
+                        // find start flag
+                        for(; idx < n; ++idx) {
+                            if(buf[idx] == CMD_START_CODE) {
+                                m_rxStreamOrder = RX_PACKET_POS_HEAD;
+                                m_pos = 0;
+                                break;
+                            }
+                        }
                     }
-                } else {
-                    memcpy(m_pRcvBuf + m_nOffset, buf, n);
-                    m_nCurrReadSize = n;
 
-                    m_nReadBufSize -= m_nCurrReadSize;        
-                    m_nOffset += m_nCurrReadSize;
+                    if(m_rxStreamOrder == RX_PACKET_POS_HEAD) {
+                        iWrite = min(CMD_HEAD_SIZE - m_pos, n - idx);
 
-                    if(m_nReadBufSize == 0) {
-                        m_nOffset = 0;
+                        memcpy(m_pRcvBuf + m_pos, buf + idx, iWrite);
 
-                        int iDataLen = ntohl( *(uint32_t*)&m_pRcvBuf[1] );
-                        int iPacketLen = CMD_HEAD_SIZE + iDataLen + CMD_TAIL_SIZE;
-                        
-                        if(iPacketLen > RECV_BUF_SIZE) {
-                            printf("read() error: too many data\n");
-                            return false;
+                        m_pos += iWrite;
+                        idx += iWrite;
+
+                        if(m_pos == CMD_HEAD_SIZE) {
+                            m_dataSize = ntohl( *((__int32_t*)(m_pRcvBuf + 1)) );
+
+                            m_pos = 0;
+                            m_rxStreamOrder = RX_PACKET_POS_DATA;
                         }
+                    }
 
-                        if(m_pRcvBuf[iPacketLen - 1] != CMD_END_CODE) {
-                            printf("read() error: invalid packet\n");
-                            return false;
+                    if(m_rxStreamOrder == RX_PACKET_POS_DATA) {
+                        iWrite = min(m_dataSize - m_pos, n - idx);
+
+                        memcpy(m_pRcvBuf + CMD_HEAD_SIZE + m_pos, buf + idx, iWrite);
+
+                        m_pos += iWrite;
+                        idx += iWrite;
+
+                        if(m_pos == m_dataSize) {
+                            m_pos = 0;
+                            m_rxStreamOrder = RX_PACKET_POS_TAIL;
                         }
+                    }
 
-                        short usCmd = ntohs( *(short*)&m_pRcvBuf[5] );
-                        if(usCmd == CMD_JPG_DEV_VERT_IMG_VERT ||
-                            usCmd == CMD_JPG_DEV_HORI_IMG_HORI ||
-                            usCmd == CMD_JPG_DEV_VERT_IMG_HORI ||
-                            usCmd == CMD_JPG_DEV_HORI_IMG_VERT) {
-                            ONYPACKET_UINT8 isKeyFrame = *&m_pRcvBuf[24];
-                            if(m_isFirstImage && isKeyFrame) {
-                                m_isFirstImage = false;
-                            }
+                    if(m_rxStreamOrder == RX_PACKET_POS_TAIL) {
+                        iWrite = min(CMD_TAIL_SIZE - m_pos, n - i);
+
+                        memcpy(m_pRcvBuf + CMD_HEAD_SIZE + m_dataSize + m_pos, buf + idx, iWrite);
+
+                        m_pos += iWrite;
+                        idx += iWrite;
+
+                        if(m_pos == CMD_TAIL_SIZE) {
+                            m_rxStreamOrder = RX_PACKET_POS_START;
 
                             if(m_pMirroringRoutine != NULL) {
                                 m_pMirroringRoutine((void*)m_pRcvBuf);
                             }
-                        } else if(usCmd == CMD_MIRRORING_JPEG_CAPTURE_FAILED) {
-                            if(m_pMirroringRoutine != NULL) {
-                                m_pMirroringRoutine((void*)m_pRcvBuf);
-                            }
                         }
-
-                        m_isHeadOfFrame = true;
                     }
                 }
+
+                // if(m_isHeadOfFrame) {
+                //     memcpy(m_pRcvBuf + m_nOffset, buf, n);
+                //     m_nCurrReadSize = n;
+                //     m_nOffset += m_nCurrReadSize;
+
+                //     if(m_nOffset >= CMD_HEAD_SIZE) {
+                //         int dataSize = ntohl( *((__int32_t*)(m_pRcvBuf + 1)) );
+
+                //         m_nReadBufSize = dataSize - (m_nOffset - CMD_HEAD_SIZE) + CMD_TAIL_SIZE;
+                //         m_isHeadOfFrame = false;
+                //     }
+                // } else {
+                //     memcpy(m_pRcvBuf + m_nOffset, buf, n);
+                //     m_nCurrReadSize = n;
+
+                //     m_nReadBufSize -= m_nCurrReadSize;        
+                //     m_nOffset += m_nCurrReadSize;
+
+                //     if(m_nReadBufSize == 0) {
+                //         m_nOffset = 0;
+
+                //         int iDataLen = ntohl( *(uint32_t*)&m_pRcvBuf[1] );
+                //         int iPacketLen = CMD_HEAD_SIZE + iDataLen + CMD_TAIL_SIZE;
+                        
+                //         if(iPacketLen > RECV_BUF_SIZE) {
+                //             printf("read() error: too many data\n");
+                //             return false;
+                //         }
+
+                //         if(m_pRcvBuf[iPacketLen - 1] != CMD_END_CODE) {
+                //             printf("read() error: invalid packet\n");
+                //             return false;
+                //         }
+
+                //         short usCmd = ntohs( *(short*)&m_pRcvBuf[5] );
+                //         if(usCmd == CMD_JPG_DEV_VERT_IMG_VERT ||
+                //             usCmd == CMD_JPG_DEV_HORI_IMG_HORI ||
+                //             usCmd == CMD_JPG_DEV_VERT_IMG_HORI ||
+                //             usCmd == CMD_JPG_DEV_HORI_IMG_VERT) {
+                //             ONYPACKET_UINT8 isKeyFrame = *&m_pRcvBuf[24];
+                //             if(m_isFirstImage && isKeyFrame) {
+                //                 m_isFirstImage = false;
+                //             }
+
+                //             if(m_pMirroringRoutine != NULL) {
+                //                 m_pMirroringRoutine((void*)m_pRcvBuf);
+                //             }
+                //         } else if(usCmd == CMD_MIRRORING_JPEG_CAPTURE_FAILED) {
+                //             if(m_pMirroringRoutine != NULL) {
+                //                 m_pMirroringRoutine((void*)m_pRcvBuf);
+                //             }
+                //         }
+
+                //         m_isHeadOfFrame = true;
+                //     }
+                // }
             }
 
             if( n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK) ) {

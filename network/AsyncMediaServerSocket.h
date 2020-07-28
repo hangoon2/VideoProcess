@@ -17,6 +17,10 @@ public:
     bool OnSend(int nHpNo, Socket sock, ONYPACKET_UINT8* pData, int iLen, bool force);
 
     ClientObject* FindHost(int nHpNo);
+    ClientObject* FindUnknown();
+
+    void AddClientList(ClientObject* pClient);
+    ClientObject** GetClientList(int nHpNo);
     
 private:
     void SetNonBlock(Socket sock);

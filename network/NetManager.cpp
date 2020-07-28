@@ -70,7 +70,9 @@ bool DoMirrorCallback(void* pMirroringPacket) {
 }
 
 void DoMirrorStoppedCallback(int nHpNo, int nStopCode) {
-    printf("MIRRONG THREAD[%d] STOPPED : %d\n", nHpNo, nStopCode);
+    if(pNetMgr != NULL) {
+        pNetMgr->OnMirrorStopped(nHpNo, nStopCode);
+    }
 }
 
 NetManager::NetManager() {
@@ -78,6 +80,8 @@ NetManager::NetManager() {
 
     for(int i = 0; i < MAXCHCNT; i++) {
         m_isOnService[i] = false;
+
+        m_iRefreshCH[i] = 1;
     }
 
     pNetMgr = this;
@@ -100,10 +104,40 @@ bool NetManager::BypassPacket(void* pMirroringPacket) {
     int iDataLen = ntohl( *(uint32_t*)&pPacket[1] );
     short usCmd = ntohs( *(short*)&pPacket[5] );
     int nHpNo = *(&pPacket[7]);
+    bool isKeyFrame = *&pPacket[24] == 1 ? true : false;
 
-//    printf("MIRRORING CALLBACK[%d] ... %d, %d\n", nHpNo, usCmd, iDataLen);
+    if(usCmd == CMD_MIRRORING_JPEG_CAPTURE_FAILED) {
+        return SendToClient(usCmd, nHpNo, pPacket, CMD_HEAD_SIZE + iDataLen + CMD_TAIL_SIZE, 0);
+    } else {
+        int iKeyFrameNo = 0;
+        // 다음 번에 KeyFrame을 보내라는 플래그가 설정되어 있으면
+        if(m_iRefreshCH[nHpNo - 1] == 1) {
+            if(isKeyFrame) {
+                iKeyFrameNo = !m_iRefreshCH[nHpNo - 1];
+                m_iRefreshCH[nHpNo - 1] = 0; 
+            } else {
+                m_mirror.SendKeyFrame(nHpNo);
+                return false;
+            }
+        }
 
-    return SendToClient(usCmd, nHpNo, pPacket, CMD_HEAD_SIZE + iDataLen + CMD_TAIL_SIZE, false);
+        if( SendToClient(usCmd, nHpNo, pPacket, CMD_HEAD_SIZE + iDataLen + CMD_TAIL_SIZE, iKeyFrameNo) ) {
+            // 전송 count 업데이트
+        } else {
+            // 전송 실패 시 키프레임을 요청한다.
+            m_mirror.SendKeyFrame(nHpNo); 
+        }
+    }
+
+    return true;
+}
+
+void NetManager::OnMirrorStopped(int nHpNo, int nStopCode) {
+    printf("MIRRONG THREAD[%d] STOPPED : %d\n", nHpNo, nStopCode);
+
+    if( IsOnService(nHpNo) ) {
+        // 아직 서비스 중인 상태에서 소켓이 닫힌 경우 DC에게 알린다.
+    }
 }
 
 bool NetManager::OnReadEx(ClientObject* pClient, char* pRcvData, int len) {
@@ -160,13 +194,63 @@ bool NetManager::OnReadEx(ClientObject* pClient, char* pRcvData, int len) {
     return ret;
 }
 
+bool NetManager::IsOnService(int nHpNo) {
+    return m_isOnService[nHpNo - 1];
+}
+
 bool NetManager::SendToClient(short usCmd, int nHpNo, ONYPACKET_UINT8* pData, int iLen, int iKeyFrameNo) {
-    ClientObject* pClient = m_VPSSvr.FindHost(nHpNo);
-    if(pClient != NULL) {
-        return m_VPSSvr.OnSend(nHpNo, pClient->m_clientSock, pData, iLen, true);
+    int iClientCount = 0;
+    ClientObject** clientList = m_VPSSvr.GetClientList(nHpNo);
+    for(int i = 0; i < MAXCLIENT_PER_CH; i++) {
+        ClientObject* pClient = clientList[i];
+        if(pClient == NULL) continue;
+        
+        if(usCmd == CMD_JPG_DEV_VERT_IMG_VERT 
+            || usCmd == CMD_JPG_DEV_HORI_IMG_HORI 
+            || usCmd == CMD_JPG_DEV_VERT_IMG_HORI 
+            || usCmd == CMD_JPG_DEV_HORI_IMG_VERT) {
+            // mirroring data
+            if(pClient->m_isFirstImage) {
+                if(iKeyFrameNo == 0) {
+                    pClient->m_isFirstImage = false;
+                } else {
+                    continue;
+                }
+            }
+        } else if(usCmd == CMD_LOGCAT 
+            || usCmd == CMD_ACK 
+            || usCmd == CMD_RESOURCE_USAGE_NETWORK 
+            || usCmd == CMD_RESOURCE_USAGE_CPU 
+            || usCmd == CMD_RESOURCE_USAGE_MEMORY) {
+            if(pClient->m_nClientType != CLIENT_TYPE_HOST 
+                && pClient->m_nClientType != CLIENT_TYPE_GUEST) {
+                continue;
+            }
+        }
+
+        if( Send(nHpNo, pData, iLen, pClient, true) ) {
+            iClientCount++;
+        }
     }
 
-    return false;
+    return iClientCount > 0;
+}
+
+bool NetManager::Send(int nHpNo, ONYPACKET_UINT8* pData, int iLen, ClientObject* pClient, bool force) {
+    if(pClient->m_clientSock == INVALID_SOCKET) return false;
+
+    bool ret = false;
+
+    pClient->Lock();
+
+    ret = m_VPSSvr.OnSend(nHpNo, pClient->m_clientSock, pData, iLen, force);
+    if(ret) {
+        // client 데이터 전송량 업데이트
+    }
+
+    pClient->Unlock();
+
+    return ret;
 }
 
 bool NetManager::CloseClient(ClientObject* pClient) {
@@ -218,7 +302,11 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
             } else {
                 pClient->m_nClientType = CLIENT_TYPE_HOST;
 
+                m_iRefreshCH[nHpNo - 1] = 1;   // 전체 영상 전송
+
                 printf("Connected Host : %s\n", pClient->m_strID);
+
+                m_VPSSvr.AddClientList(pClient);
             }
 
             ret = true;
@@ -226,12 +314,20 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
         break;
 
         case CMD_ID_GUEST: {
+            pClient->m_nHpNo = nHpNo;
+            pClient->m_nClientType = CLIENT_TYPE_GUEST;
+            m_iRefreshCH[nHpNo - 1] = 1;    // 전체 영상 전송
 
+            m_VPSSvr.AddClientList(pClient);
         }
         break;
 
         case CMD_ID_MONITOR: {
+            pClient->m_nHpNo = nHpNo;
+            pClient->m_nClientType = CLIENT_TYPE_MONITOR;
+            m_iRefreshCH[nHpNo - 1] = 1;    // 전체 영상 전송
 
+            m_VPSSvr.AddClientList(pClient);
         }
         break;
 
@@ -269,6 +365,20 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
 
             // test code
             m_mirror.StopMirroring(nHpNo);
+        }
+        break;
+
+        case CMD_VERTICAL: {
+            m_mirror.SendKeyFrame(nHpNo);
+
+            m_mirror.SetDeviceOrientation(nHpNo, 1);
+        }
+        break;
+
+        case CMD_HORIZONTAL: {
+            m_mirror.SendKeyFrame(nHpNo);
+
+            m_mirror.SetDeviceOrientation(nHpNo, 0);
         }
         break;
     }

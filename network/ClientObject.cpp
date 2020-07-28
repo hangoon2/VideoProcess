@@ -19,6 +19,10 @@ ClientObject::ClientObject() {
     m_nClientType = CLIENT_TYPE_UNKNOWN;
 
     m_isExitCommandReceived = false;
+
+    m_isFirstImage = true;
+
+    pthread_mutex_init(&m_lock, NULL);
 }
 
 ClientObject::~ClientObject() {
@@ -29,4 +33,12 @@ ClientObject::~ClientObject() {
     m_clientSock = INVALID_SOCKET;
     
     delete [] m_rcvCommandBuffer;
+}
+
+void ClientObject::Lock() {
+    pthread_mutex_lock(&m_lock);
+}
+
+void ClientObject::Unlock() {
+    pthread_mutex_unlock(&m_lock);
 }

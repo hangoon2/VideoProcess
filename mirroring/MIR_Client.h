@@ -11,6 +11,13 @@ typedef void (*PMIRRORING_STOP_ROUTINE)(int nHpNo, int nStopCode);
 #define SEND_BUF_SIZE   512
 #define RECV_BUF_SIZE   (2 * 1024 * 1024)
 
+enum {
+    RX_PACKET_POS_START,
+    RX_PACKET_POS_HEAD,
+    RX_PACKET_POS_DATA,
+    RX_PACKET_POS_TAIL
+};
+
 class MIR_Client {
 public:
     MIR_Client();
@@ -36,12 +43,14 @@ public:
     int GetControlPort();
 
     int SendOnOffPacket(bool onoff);
+    int SendKeyFramePacket(int nHpNo);
 
     bool GetData(int efd, Socket sock, int waitms);
 
 private:
     int SendToControlSocket(const char* buf, int len);
 
+    ONYPACKET_UINT8* MakeOnyPacketKeyFrame(int nHpNo, int& size);
     ONYPACKET_UINT8* MakeOnyPacketOnOff(int nHpNo, bool onoff, int& size);
 
 public:
@@ -64,13 +73,18 @@ private:
     int m_nMirrorPort;
     int m_nControlPort;
 
-    int m_nOffset;
-    int m_nCurrReadSize;
-    int m_nReadBufSize;
-    bool m_isHeadOfFrame;
-    bool m_isFirstImage;
+    // int m_nOffset;
+    // int m_nCurrReadSize;
+    // int m_nReadBufSize;
+    // bool m_isHeadOfFrame;
+    // bool m_isFirstImage;
 
     ONYPACKET_UINT8 m_sendBuf[SEND_BUF_SIZE];
+
+    int m_pos;
+    //int m_iWrite;
+    int m_rxStreamOrder;
+    int m_dataSize;
 };
 
 #endif
