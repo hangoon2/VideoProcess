@@ -2,9 +2,9 @@ CC=g++
 TARGET=vps
 CPPFLAGS=--std=c++11
 OPENCV_FLAGS=`pkg-config opencv4 --cflags`
-INC=-I /usr/local/include/opencv4
+OPENCV_INC=-I /usr/local/include/opencv4
 LDLIBS=-lopencv_core -lopencv_imgcodecs -lopencv_imgproc -lpthread
-OBJS=main.o NetManager.o AsyncMediaServerSocket.o ClientObject.o ClientList.o Mirroring.o MIR_Client.o MirrorCommon.o VPSJpeg.o
+OBJS=main.o NetManager.o AsyncMediaServerSocket.o ClientObject.o ClientList.o Mirroring.o MIR_Client.o VPSJpeg.o VPSCommon.o Timer.o
 
 $(TARGET): $(OBJS)
 	$(CC) -o $@ $(OBJS) $(LDLIBS)
@@ -31,11 +31,14 @@ Mirroring.o: mirroring/Mirroring.cpp
 MIR_Client.o: mirroring/MIR_Client.cpp
 	$(CC) -c mirroring/MIR_Client.cpp $(CPPFLAGS)
 
-MirrorCommon.o: mirroring/MirrorCommon.cpp
-	$(CC) -c mirroring/MirrorCommon.cpp $(CPPFLAGS)
-
 VPSJpeg.o: mirroring/VPSJpeg.cpp
-	$(CC) -c mirroring/VPSJpeg.cpp $(CPPFLAGS) $(OPENCV_FLAGS) $(INC)
+	$(CC) -c mirroring/VPSJpeg.cpp $(CPPFLAGS) $(OPENCV_FLAGS) $(OPENCV_INC)
+
+VPSCommon.o: common/VPSCommon.cpp
+	$(CC) -c common/VPSCommon.cpp $(CPPFLAGS)
+
+Timer.o: common/Timer.cpp
+	$(CC) -c common/Timer.cpp $(CPPFLAGS)
 
 clean:
 	rm -f $(TARGET)

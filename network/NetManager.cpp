@@ -5,53 +5,10 @@
 
 static NetManager *pNetMgr = NULL;
 
-uint16_t SwapEndianU2(uint16_t wValue) {
-    return (uint16_t)((wValue >> 8) | (wValue << 8));
-}
+void OnTimer(int id) {
+    if(pNetMgr == NULL) return;
 
-uint32_t SwapEndianU4(uint32_t nValue) {
-    char bTmp;
-    bTmp = *((char*)&nValue + 3);
-    *((char*)&nValue + 3) = *((char*)&nValue + 0);
-    *((char*)&nValue + 0) = bTmp;
-
-    bTmp = *((char*)&nValue + 2);
-    *((char*)&nValue + 2) = *((char*)&nValue + 1);
-    *((char*)&nValue + 1) = bTmp;
-
-    return nValue;
-}
-
-uint16_t in_checksum(short* ptr, int nbytes) {
-    long sum = 0;
-    short answer;
-    short tmp;
-    short sCodeBIG;
-
-    while(nbytes >= 2) {
-        // 읽어올 값이 남아있으면
-        // 포인터 하나씩 증가하면서 sum값에 더함
-        tmp = *ptr;
-        sCodeBIG = SwapEndianU2( (short)tmp );
-        sum += sCodeBIG;
-        ptr++;
-
-        nbytes -= 2;
-    }
-
-    if(nbytes == 1) {
-        // 남은 읽어 올 값이 홀수이면 그것도 더해줌
-        char tmp2 = *(char*)ptr;
-        sCodeBIG = SwapEndianU2(tmp2);
-        sum = sum + abs(tmp2);
-    }
-
-    sum = (sum >> 16) + (sum & 0xffff);
-    sum += (sum >> 16);
-    answer = (short)~sum;
-    answer = SwapEndianU2( (short)answer );
-
-    return answer;
+    pNetMgr->UpdateState(id);
 }
 
 bool OnReadEx(ClientObject* pClient, char* pRcvData, int len) {
@@ -80,15 +37,24 @@ NetManager::NetManager() {
 
     for(int i = 0; i < MAXCHCNT; i++) {
         m_isOnService[i] = false;
+        m_isReceivedRecordStartCommand[i] = false;
+
+        m_nCaptureCommandReceivedCount[i] = 0;
 
         m_iRefreshCH[i] = 1;
     }
 
     pNetMgr = this;
+
+    m_timer_1.Start(TIMERID_JPGFPS_1SEC, OnTimer);
+    m_timer_1.Start(TIMERID_10SEC, OnTimer);
 }
 
 NetManager::~NetManager() {
     printf("Call NetManager Destructor\n");
+
+    m_timer_1.Stop();
+    m_timer_10.Stop();
 }
 
 void NetManager::OnServerModeStart() {
@@ -106,7 +72,7 @@ bool NetManager::BypassPacket(void* pMirroringPacket) {
     int nHpNo = *(&pPacket[7]);
     bool isKeyFrame = *&pPacket[24] == 1 ? true : false;
 
-    if(usCmd == CMD_MIRRORING_JPEG_CAPTURE_FAILED) {
+    if(usCmd == CMD_MIRRORING_CAPTURE_FAILED) {
         return SendToClient(usCmd, nHpNo, pPacket, CMD_HEAD_SIZE + iDataLen + CMD_TAIL_SIZE, 0);
     } else {
         int iKeyFrameNo = 0;
@@ -198,6 +164,15 @@ bool NetManager::IsOnService(int nHpNo) {
     return m_isOnService[nHpNo - 1];
 }
 
+bool NetManager::IsReceivedRecordStartCommand(int nHpNo) {
+    return m_isReceivedRecordStartCommand[nHpNo - 1];
+}
+
+bool NetManager::SendToMobileController(ONYPACKET_UINT8* pData, int iLen, bool force) {
+    ClientObject* pMobileController = m_VPSSvr.GetMobileController();
+    return Send(pData, iLen, pMobileController, force);
+}
+
 bool NetManager::SendToClient(short usCmd, int nHpNo, ONYPACKET_UINT8* pData, int iLen, int iKeyFrameNo) {
     int iClientCount = 0;
     ClientObject** clientList = m_VPSSvr.GetClientList(nHpNo);
@@ -228,7 +203,7 @@ bool NetManager::SendToClient(short usCmd, int nHpNo, ONYPACKET_UINT8* pData, in
             }
         }
 
-        if( Send(nHpNo, pData, iLen, pClient, true) ) {
+        if( Send(pData, iLen, pClient, true) ) {
             iClientCount++;
         }
     }
@@ -236,14 +211,14 @@ bool NetManager::SendToClient(short usCmd, int nHpNo, ONYPACKET_UINT8* pData, in
     return iClientCount > 0;
 }
 
-bool NetManager::Send(int nHpNo, ONYPACKET_UINT8* pData, int iLen, ClientObject* pClient, bool force) {
+bool NetManager::Send(ONYPACKET_UINT8* pData, int iLen, ClientObject* pClient, bool force) {
     if(pClient->m_clientSock == INVALID_SOCKET) return false;
 
     bool ret = false;
 
     pClient->Lock();
 
-    ret = m_VPSSvr.OnSend(nHpNo, pClient->m_clientSock, pData, iLen, force);
+    ret = m_VPSSvr.OnSend(pClient->m_clientSock, pData, iLen, force);
     if(ret) {
         // client 데이터 전송량 업데이트
     }
@@ -280,7 +255,7 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
     }
 
     uint16_t usChkRcv = *(uint16_t*)&pRcvData[CMD_HEAD_SIZE + iDataLen];
-    uint16_t usChk = in_checksum( (short*)&pRcvData[1], 7 + iDataLen);
+    uint16_t usChk = calChecksum( (ONYPACKET_UINT16*)&pRcvData[1], 7 + iDataLen);
     if(usChkRcv != usChk) {
         printf("***** Wrong Check Sum  => Rcv: %X, Calc: %X\n", usChkRcv, usChk);
         return false;
@@ -290,6 +265,18 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
     char* pData = &pRcvData[CMD_HEAD_SIZE];
 
     switch(usCmd) {
+        case CMD_LOGCAT:
+        case CMD_ACK:
+        case CMD_TEST_RESULT:
+        case CMD_TEST_START_EVENT_INDEX:
+        case CMD_TEST_START_EVENT_PATH:
+        case CMD_TEST_START_SCRIPT_RESULT:
+        case CMD_RESOURCE_USAGE_NETWORK:
+        case CMD_RESOURCE_USAGE_CPU:
+        case CMD_RESOURCE_USAGE_MEMORY: {
+            return SendToClient(usCmd, nHpNo, (ONYPACKET_UINT8*)pRcvData, len, 0);
+        }
+
         case CMD_ID: {
             memcpy(pClient->m_strID, pData, iDataLen);
             pClient->m_nHpNo = nHpNo;
@@ -305,29 +292,31 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
                 m_iRefreshCH[nHpNo - 1] = 1;   // 전체 영상 전송
 
                 printf("Connected Host : %s\n", pClient->m_strID);
-
-                m_VPSSvr.AddClientList(pClient);
             }
+
+            m_VPSSvr.UpdateClientList(pClient);
 
             ret = true;
         }
         break;
 
         case CMD_ID_GUEST: {
+            memcpy(pClient->m_strID, pData, iDataLen);
             pClient->m_nHpNo = nHpNo;
             pClient->m_nClientType = CLIENT_TYPE_GUEST;
             m_iRefreshCH[nHpNo - 1] = 1;    // 전체 영상 전송
 
-            m_VPSSvr.AddClientList(pClient);
+            m_VPSSvr.UpdateClientList(pClient);
         }
         break;
 
         case CMD_ID_MONITOR: {
+            memcpy(pClient->m_strID, pData, iDataLen);
             pClient->m_nHpNo = nHpNo;
             pClient->m_nClientType = CLIENT_TYPE_MONITOR;
             m_iRefreshCH[nHpNo - 1] = 1;    // 전체 영상 전송
 
-            m_VPSSvr.AddClientList(pClient);
+            m_VPSSvr.UpdateClientList(pClient);
         }
         break;
 
@@ -342,6 +331,21 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
             if(nClientType == CLIENT_TYPE_GUEST) {
 
             }
+        }
+        break;
+
+        case CMD_DISCONNECT_GUEST: {
+
+        }
+        break;
+
+        case CMD_UPDATE_SERVICE_TIME: {
+
+        }
+        break;
+
+        case CMD_DEVICE_DISCONNECTED: {
+
         }
         break;
 
@@ -381,7 +385,85 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
             m_mirror.SetDeviceOrientation(nHpNo, 0);
         }
         break;
+
+        case CMD_RECORD: {
+            bool start = pData[0] == 1 ? true : false;
+
+            printf("[VPS:%d] [Record] 단말기 녹화 %s 명령 받음\n", nHpNo, start ? "시작" : "정지");
+
+            // 녹화 명령 처리
+
+            m_mirror.SendKeyFrame(nHpNo);
+
+            m_isReceivedRecordStartCommand[nHpNo - 1] = start;
+        }
+        break;
+
+        case CMD_JPG_CAPTURE: {
+            m_nCaptureCommandReceivedCount[nHpNo - 1]++;
+
+            m_isJpgCapture[nHpNo - 1] = true;
+
+            printf("[VPS:%d] [Capture] 단말기 화면 캡쳐 명령 받음\n", nHpNo);
+
+            m_mirror.SendKeyFrame(nHpNo);
+        }
+        break;
+
+        case CMD_PLAYER_QUALITY: {
+
+        }
+        break;
+
+        case CMD_PLAYER_FPS: {
+
+        }
+        break; 
+
+        case CMD_KEY_FRAME: {
+            m_mirror.SendKeyFrame(nHpNo);
+        }
+        break;
+
+        case CMD_CHANGE_RESOLUTION: {
+
+        }
+        break;
+
+        case CMD_CHANGE_RESOLUTION_RATIO: {
+
+        }
+        break;
+
+        case CMD_REQUEST_MAX_RESOLUTION: {
+
+        }
+        break;
+
+        case CMD_MONITOR_VD_HEARTBEAT: {
+            // 별도의 처리는 하지 않는다.
+        }
+        break;
+
+        default: {
+            SendToMobileController((ONYPACKET_UINT8*)pRcvData, len);
+        }
+        break;
     }
 
     return ret;
+}
+
+void NetManager::UpdateState(int id) {
+    switch(id) {
+        case TIMERID_JPGFPS_1SEC: {
+             
+        }
+        break;
+
+        case TIMERID_10SEC: {
+
+        }
+        break;
+    }
 }

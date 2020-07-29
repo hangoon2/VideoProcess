@@ -118,7 +118,7 @@ bool AsyncMediaServerSocket::OnClose(Socket sock) {
     return false;
 }
 
-bool AsyncMediaServerSocket::OnSend(int nHpNo, Socket sock, ONYPACKET_UINT8* pData, int iLen, bool force) {
+bool AsyncMediaServerSocket::OnSend(Socket sock, ONYPACKET_UINT8* pData, int iLen, bool force) {
     int ret = (int)write(sock, pData, iLen);
     if(ret != iLen) {
         return false;
@@ -195,8 +195,12 @@ ClientObject* AsyncMediaServerSocket::FindUnknown() {
     return m_clientList.FindUnknown();
 }
 
-void AsyncMediaServerSocket::AddClientList(ClientObject* pClient) {
-    m_clientList.InsertClient(pClient);
+ClientObject* AsyncMediaServerSocket::GetMobileController() {
+    return m_clientList.GetMobileController();
+}
+
+void AsyncMediaServerSocket::UpdateClientList(ClientObject* pClient) {
+    m_clientList.UpdateClient(pClient);
 }
 
 ClientObject** AsyncMediaServerSocket::GetClientList(int nHpNo) {

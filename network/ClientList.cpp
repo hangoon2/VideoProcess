@@ -69,13 +69,17 @@ ClientObject* ClientList::FindUnknown() {
     return NULL;
 }
 
-void ClientList::InsertClient(ClientObject* pClient) {
-    int nHpNo = pClient->m_nHpNo;
-    for(int i = 0; i < MAXCLIENT_PER_CH; i++) {
-        if(m_clientList[nHpNo - 1][i] == NULL) {
-            m_clientList[nHpNo - 1][i] = pClient;
-            printf("UPDATE CLIENT LIST\n");
-            break;
+void ClientList::UpdateClient(ClientObject* pClient) {
+    if(pClient->m_nClientType == CLIENT_TYPE_MC) {
+        m_mobileController = pClient;
+    } else {
+        int nHpNo = pClient->m_nHpNo;
+        for(int i = 0; i < MAXCLIENT_PER_CH; i++) {
+            if(m_clientList[nHpNo - 1][i] == NULL) {
+                m_clientList[nHpNo - 1][i] = pClient;
+                printf("UPDATE CLIENT LIST\n");
+                break;
+            }
         }
     }
 }
@@ -89,6 +93,10 @@ void ClientList::DeleteClient(ClientObject* pClinet) {
             break;
         }
     }
+}
+
+ClientObject* ClientList::GetMobileController() {
+    return m_mobileController;
 }
 
 ClientObject** ClientList::GetClientList(int nHpNo) {

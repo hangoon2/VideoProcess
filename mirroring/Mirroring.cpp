@@ -1,6 +1,5 @@
 #include "Mirroring.h"
 #include "VPSJpeg.h"
-#include "MirrorCommon.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,7 +16,7 @@ bool MirroringCallback(void* pMirroringPacket) {
         return false;
     }
 
-    if(usCmd == CMD_MIRRORING_JPEG_CAPTURE_FAILED) {
+    if(usCmd == CMD_MIRRORING_CAPTURE_FAILED) {
         pMirroring->HandleJpegCaptureFailedPacket(pPacket, nHpNo);
     } else {
         pMirroring->HandleJpegPacket(pPacket, iDataLen, usCmd, nHpNo);

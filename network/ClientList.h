@@ -21,8 +21,9 @@ public:
     ClientObject* FindHost(int nHpNo);
     ClientObject* FindUnknown();
 
-    void InsertClient(ClientObject* pClient);
-    
+    void UpdateClient(ClientObject* pClient);
+
+    ClientObject* GetMobileController();
     ClientObject** GetClientList(int nHpNo);
 
 private:
@@ -32,6 +33,7 @@ private:
     map<Socket, ClientObject*> m_clientMap;
 
     ClientObject* m_clientList[MAXCHCNT][MAXCLIENT_PER_CH];
+    ClientObject* m_mobileController;
 };
 
 #endif

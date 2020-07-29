@@ -1,5 +1,4 @@
 #include "MIR_Client.h"
-#include "MirrorCommon.h"
 
 #include <sys/socket.h>
 #include <netinet/in.h>

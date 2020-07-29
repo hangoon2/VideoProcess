@@ -14,12 +14,13 @@ public:
 
     int InitSocket(int port, PDATA_READ_ROUTINE pOnReadEx);
     bool OnClose(Socket sock);
-    bool OnSend(int nHpNo, Socket sock, ONYPACKET_UINT8* pData, int iLen, bool force);
+    bool OnSend(Socket sock, ONYPACKET_UINT8* pData, int iLen, bool force);
 
     ClientObject* FindHost(int nHpNo);
     ClientObject* FindUnknown();
 
-    void AddClientList(ClientObject* pClient);
+    ClientObject* GetMobileController();
+    void UpdateClientList(ClientObject* pClient);
     ClientObject** GetClientList(int nHpNo);
     
 private:
