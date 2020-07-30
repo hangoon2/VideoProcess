@@ -8,15 +8,17 @@
 
 #define INVALID_SOCKET 0L
 
-typedef int Socket;
-typedef int ServerSocket;
-
 #define CMD_START_CODE  0x7F
 #define CMD_END_CODE    0xEF
 #define CMD_HEAD_SIZE   8
 #define CMD_TAIL_SIZE   3
 
-typedef unsigned char   ONYPACKET_UINT8;
+#define SEND_BUF_SIZE   512
+
+typedef int Socket;
+typedef int ServerSocket;
+
+typedef unsigned char   BYTE;
 typedef unsigned short  ONYPACKET_UINT16;
 typedef int             ONYPACKET_INT;
 typedef long            ONYPACKET_INT32;
@@ -49,6 +51,7 @@ typedef long long       ONYPACKET_INT64;
 #define CMD_JPG_CAPTURE                 1006
 // VPS -> VD(최대 녹화 시간에 도달하면 VPS에서 클라이언트로 녹화 중지 명령 보냄)
 #define CMD_STOP_RECORDING              1007
+#define CMD_WAKEUP                      1008
 
 #define CMD_ACK                         10001
 #define CMD_LOGCAT                      10003
@@ -81,6 +84,8 @@ typedef long long       ONYPACKET_INT64;
 #define CMD_DISCONNECT_GUEST            30011
 #define CMD_UPDATE_SERVICE_TIME         30012
 
+#define CMD_GUEST_UPDATED               31001
+
 // 디바이스가 연결된 상태임을 알리는 메시지(VD -> VPS)
 #define CMD_MONITOR_VD_HEARTBEAT        32100
 
@@ -89,8 +94,10 @@ typedef long long       ONYPACKET_INT64;
 /*//////////////////////////////////////////////
 //               Common Function              //
 //////////////////////////////////////////////*/
-ONYPACKET_UINT16 calChecksum(unsigned short* ptr, int nbytes);
+ONYPACKET_UINT16 CalChecksum(unsigned short* ptr, int nbytes);
 uint16_t SwapEndianU2(uint16_t wValue);
 uint32_t SwapEndianU4(uint32_t nValue);
+
+BYTE* MakeSendData2(short usCmd, int nHpNo, int dataLen, BYTE* pData, BYTE* pDstData, int& totLen);
 
 #endif

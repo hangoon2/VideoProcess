@@ -5,6 +5,8 @@
 
 static NetManager *pNetMgr = NULL;
 
+static BYTE gs_pBufSendDataToClient[MAXCHCNT][SEND_BUF_SIZE] = {0,};
+
 void OnTimer(int id) {
     if(pNetMgr == NULL) return;
 
@@ -37,8 +39,9 @@ NetManager::NetManager() {
 
     for(int i = 0; i < MAXCHCNT; i++) {
         m_isOnService[i] = false;
-        m_isReceivedRecordStartCommand[i] = false;
-
+        
+        m_nRecordStartCommandCountReceived[i] = 0;
+        m_nRecordStopCommandCountReceived[i] = 0;
         m_nCaptureCommandReceivedCount[i] = 0;
 
         m_iRefreshCH[i] = 1;
@@ -65,7 +68,7 @@ void NetManager::OnServerModeStart() {
 }
 
 bool NetManager::BypassPacket(void* pMirroringPacket) {
-    ONYPACKET_UINT8* pPacket = (ONYPACKET_UINT8*)pMirroringPacket;
+    BYTE* pPacket = (BYTE*)pMirroringPacket;
 
     int iDataLen = ntohl( *(uint32_t*)&pPacket[1] );
     short usCmd = ntohs( *(short*)&pPacket[5] );
@@ -99,10 +102,21 @@ bool NetManager::BypassPacket(void* pMirroringPacket) {
 }
 
 void NetManager::OnMirrorStopped(int nHpNo, int nStopCode) {
-    printf("MIRRONG THREAD[%d] STOPPED : %d\n", nHpNo, nStopCode);
+    printf("MIRRORING THREAD[%d] STOPPED : %d\n", nHpNo, nStopCode);
 
     if( IsOnService(nHpNo) ) {
         // 아직 서비스 중인 상태에서 소켓이 닫힌 경우 DC에게 알린다.
+        static BYTE pDstData[SEND_BUF_SIZE] = {0,};
+        BYTE pData[2] = {0,};
+        short errorCode = htons(101);
+        int totLen = 0;
+
+        memcpy(pData, &errorCode, 2);
+        BYTE* pSendData = MakeSendData2(CMD_MIRRORING_CAPTURE_FAILED, nHpNo, 2, pData, pDstData, totLen);
+
+        SendToMobileController(pSendData, totLen);
+
+        printf("[VPS:%d] The socket is abnormally closed.\n", nHpNo);
     }
 }
 
@@ -128,7 +142,6 @@ bool NetManager::OnReadEx(ClientObject* pClient, char* pRcvData, int len) {
 
         bool bPacketOK = false;
         int iDataLen = SwapEndianU4( *(int*)&pClient->m_rcvCommandBuffer[1] );
-        printf("NetManager::OnReadEx Data Size : %d\n", iDataLen);
         int totDataLen = CMD_HEAD_SIZE + iDataLen + CMD_TAIL_SIZE;
         if(pClient->m_rcvPos >= totDataLen) {
             if(pClient->m_rcvCommandBuffer[totDataLen - 1]) {
@@ -164,16 +177,12 @@ bool NetManager::IsOnService(int nHpNo) {
     return m_isOnService[nHpNo - 1];
 }
 
-bool NetManager::IsReceivedRecordStartCommand(int nHpNo) {
-    return m_isReceivedRecordStartCommand[nHpNo - 1];
-}
-
-bool NetManager::SendToMobileController(ONYPACKET_UINT8* pData, int iLen, bool force) {
+bool NetManager::SendToMobileController(BYTE* pData, int iLen, bool force) {
     ClientObject* pMobileController = m_VPSSvr.GetMobileController();
     return Send(pData, iLen, pMobileController, force);
 }
 
-bool NetManager::SendToClient(short usCmd, int nHpNo, ONYPACKET_UINT8* pData, int iLen, int iKeyFrameNo) {
+bool NetManager::SendToClient(short usCmd, int nHpNo, BYTE* pData, int iLen, int iKeyFrameNo) {
     int iClientCount = 0;
     ClientObject** clientList = m_VPSSvr.GetClientList(nHpNo);
     for(int i = 0; i < MAXCLIENT_PER_CH; i++) {
@@ -211,7 +220,7 @@ bool NetManager::SendToClient(short usCmd, int nHpNo, ONYPACKET_UINT8* pData, in
     return iClientCount > 0;
 }
 
-bool NetManager::Send(ONYPACKET_UINT8* pData, int iLen, ClientObject* pClient, bool force) {
+bool NetManager::Send(BYTE* pData, int iLen, ClientObject* pClient, bool force) {
     if(pClient->m_clientSock == INVALID_SOCKET) return false;
 
     bool ret = false;
@@ -237,7 +246,7 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
     short usCmd = SwapEndianU2( *(short*)&pRcvData[5] );
     int nHpNo = (int)pRcvData[7];
 
-    printf("Received Data : %d, %d, %d\n", nHpNo, usCmd, iDataLen);
+//    printf("Received Data : %d, %d, %d\n", nHpNo, usCmd, iDataLen);
 
     if(iDataLen > RECV_BUFFER_SIZE || len < CMD_HEAD_SIZE + CMD_TAIL_SIZE) {
         // 잘못된 길이의 패킷
@@ -254,12 +263,12 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
         return false;
     }
 
-    uint16_t usChkRcv = *(uint16_t*)&pRcvData[CMD_HEAD_SIZE + iDataLen];
-    uint16_t usChk = calChecksum( (ONYPACKET_UINT16*)&pRcvData[1], 7 + iDataLen);
-    if(usChkRcv != usChk) {
-        printf("***** Wrong Check Sum  => Rcv: %X, Calc: %X\n", usChkRcv, usChk);
-        return false;
-    }
+//    uint16_t usChkRcv = *(uint16_t*)&pRcvData[CMD_HEAD_SIZE + iDataLen];
+//    uint16_t usChk = calChecksum( (ONYPACKET_UINT16*)&pRcvData[1], 7 + iDataLen);
+//    if(usChkRcv != usChk) {
+//        printf("***** Wrong Check Sum  => Rcv: %X, Calc: %X\n", usChkRcv, usChk);
+//        return false;
+//    }
 
     bool ret = false;
     char* pData = &pRcvData[CMD_HEAD_SIZE];
@@ -274,8 +283,9 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
         case CMD_RESOURCE_USAGE_NETWORK:
         case CMD_RESOURCE_USAGE_CPU:
         case CMD_RESOURCE_USAGE_MEMORY: {
-            return SendToClient(usCmd, nHpNo, (ONYPACKET_UINT8*)pRcvData, len, 0);
+            return SendToClient(usCmd, nHpNo, (BYTE*)pRcvData, len, 0);
         }
+        break;
 
         case CMD_ID: {
             memcpy(pClient->m_strID, pData, iDataLen);
@@ -285,13 +295,13 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
             if( !strcmp(pClient->m_strID, MOBILE_CONTROLL_ID) ) {
                 pClient->m_nClientType = CLIENT_TYPE_MC;
 
-                printf("Connected Mobile Controller\n");
+                printf("[VPS:0] Connected Mobile Controller\n");
             } else {
                 pClient->m_nClientType = CLIENT_TYPE_HOST;
 
                 m_iRefreshCH[nHpNo - 1] = 1;   // 전체 영상 전송
 
-                printf("Connected Host : %s\n", pClient->m_strID);
+                printf("[VPS:%d] Connected Host : %s\n", nHpNo, pClient->m_strID);
             }
 
             m_VPSSvr.UpdateClientList(pClient);
@@ -305,6 +315,23 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
             pClient->m_nHpNo = nHpNo;
             pClient->m_nClientType = CLIENT_TYPE_GUEST;
             m_iRefreshCH[nHpNo - 1] = 1;    // 전체 영상 전송
+
+            // Guest 연결될때 해당 채널의 Host가 연결되어 있지 않으면 연결을 허락하지 않음
+            ClientObject* pHost = m_VPSSvr.FindHost(nHpNo);
+            if(pHost == NULL) {
+                int totLen = 0;
+                BYTE* pSendData = MakeSendData2(CMD_DISCONNECT_GUEST, nHpNo, iDataLen, (BYTE*)pData, gs_pBufSendDataToClient[nHpNo - 1], totLen);
+                Send(pSendData, totLen, pClient, false);
+
+                return true;
+            } else {
+                // 디바이스와의 영상은 이미 연결된 상태이므로 Keyframe을 요청한다.
+                m_mirror.SendKeyFrame(nHpNo);
+
+                int totLen = 0;
+                BYTE* pSendData = MakeSendData2(CMD_GUEST_UPDATED, nHpNo, 0, NULL, gs_pBufSendDataToClient[nHpNo - 1], totLen);
+                Send(pSendData, totLen, pHost, false);
+            }
 
             m_VPSSvr.UpdateClientList(pClient);
         }
@@ -329,23 +356,54 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
             CloseClient(pClient);   // ClientObject 객체 삭제됨
 
             if(nClientType == CLIENT_TYPE_GUEST) {
-
+                ClientObject* pHost = m_VPSSvr.FindHost(nHpNo);
+                if(pHost != NULL) {
+                    int totLen = 0;
+                    BYTE* pSendData = MakeSendData2(CMD_GUEST_UPDATED, nHpNo, 0, NULL, gs_pBufSendDataToClient[nHpNo - 1], totLen);
+                    Send(pSendData, totLen, pHost, false);
+                }
             }
         }
         break;
 
         case CMD_DISCONNECT_GUEST: {
+            char id[DEFAULT_STRING_SIZE] = {0,};
+            memcpy(id, pData, iDataLen);
 
+            ClientObject* pGuest = m_VPSSvr.FindGuest(nHpNo, id);
+            if(pGuest != NULL) {
+                if( !Send((BYTE*)pRcvData, len, pGuest, false) ) {
+                    // Guest에 DISCONNECT 전송 실패 시 강제 종료 시킴
+                    m_VPSSvr.OnClose(pGuest->m_clientSock);
+                }
+            }
         }
         break;
 
         case CMD_UPDATE_SERVICE_TIME: {
+            ClientObject** pClientList = m_VPSSvr.GetClientList(nHpNo);
+            for(int i = 0; i < MAXCLIENT_PER_CH; i++) {
+                ClientObject* pGuest = pClientList[i];
+                if(pGuest == NULL) continue;
 
+                if(pGuest->m_nClientType == CLIENT_TYPE_GUEST) {
+                    Send((BYTE*)pRcvData, len, pGuest, false);
+                }
+            }
         }
         break;
 
         case CMD_DEVICE_DISCONNECTED: {
+            ClientObject** pClientList = m_VPSSvr.GetClientList(nHpNo);
+            for(int i = 0; i < MAXCLIENT_PER_CH; i++) {
+                ClientObject* pClientObj = pClientList[i];
+                if(pClientObj == NULL) continue;
 
+                if(pClientObj->m_nClientType == CLIENT_TYPE_HOST
+                    && pClientObj->m_nClientType == CLIENT_TYPE_MONITOR) {
+                    Send((BYTE*)pRcvData, len, pClientObj, false);
+                }
+            }
         }
         break;
 
@@ -359,6 +417,10 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
 
             // start mirroring
             m_mirror.StartMirroring(nHpNo, DoMirrorCallback, DoMirrorStoppedCallback);
+
+            // 기존 VPS에서는 CMD_PLAYER_QUALITY 명령을 보낸다.
+            // 안드로이드 영상 프로세스(nxptc)는 기본 70으로 되어 있어서 보낼 필요 없음
+            // ios 영상 프로세스(onycap)는 확인 필요, 우선 처리 보류
         }
         break;
 
@@ -393,9 +455,13 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
 
             // 녹화 명령 처리
 
-            m_mirror.SendKeyFrame(nHpNo);
+            if(start) {
+                m_mirror.SendKeyFrame(nHpNo);
 
-            m_isReceivedRecordStartCommand[nHpNo - 1] = start;
+                m_nRecordStartCommandCountReceived[nHpNo - 1]++;
+            } else {
+                m_nRecordStopCommandCountReceived[nHpNo - 1]++;
+            }
         }
         break;
 
@@ -411,17 +477,23 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
         break;
 
         case CMD_PLAYER_QUALITY: {
-
+            m_mirror.SendControlPacket(nHpNo, (BYTE*)pRcvData, len);
         }
         break;
 
-        case CMD_PLAYER_FPS: {
+        case CMD_KEY_FRAME: {
+            m_mirror.SendKeyFrame(nHpNo);
+        }
+        break;
 
+        //////////// 사용 하지 않는 패킷(?) ////////////////////
+        case CMD_PLAYER_FPS: {
+            // 캡쳐 보드에서 사용(?)
         }
         break; 
 
-        case CMD_KEY_FRAME: {
-            m_mirror.SendKeyFrame(nHpNo);
+        case CMD_WAKEUP: {
+
         }
         break;
 
@@ -431,7 +503,8 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
         break;
 
         case CMD_CHANGE_RESOLUTION_RATIO: {
-
+            // 녹화 중이면 해상도를 변경하지 않음
+            
         }
         break;
 
@@ -439,6 +512,7 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
 
         }
         break;
+        /////////////////////////////////////////////////////
 
         case CMD_MONITOR_VD_HEARTBEAT: {
             // 별도의 처리는 하지 않는다.
@@ -446,7 +520,7 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
         break;
 
         default: {
-            SendToMobileController((ONYPACKET_UINT8*)pRcvData, len);
+            SendToMobileController((BYTE*)pRcvData, len);
         }
         break;
     }

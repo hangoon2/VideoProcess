@@ -154,7 +154,7 @@ void* ThreadFunc(void* pArg) {
         kevent(epollfd, ev, n, NULL, 0, NULL);
 
         // memory alloc : read buffer
-        pClient->m_pRcvBuf = (ONYPACKET_UINT8*)malloc(RECV_BUF_SIZE);
+        pClient->m_pRcvBuf = (BYTE*)malloc(RECV_BUF_SIZE);
 
         int i = 0;
         while( !pClient->IsDoExitRunClientThread() ) {
@@ -173,8 +173,9 @@ void* ThreadFunc(void* pArg) {
     pClient->SetRunClientThreadReady(false);
     printf("Mirroring service stopped\n");
 
-    // send : mirror off
-    pClient->SendOnOffPacket(false);
+    // Stop 처리에서 이미 보냄
+//    // send : mirror off
+//    pClient->SendOnOffPacket(false);
 
     pClient->CleanUpRunClientThreadData();
 
@@ -244,7 +245,7 @@ bool MIR_Client::StartRunClientThread(int nHpNo, int nMirroringPort, int nContro
         }
     } else {
         // send key frame
-        SendKeyFramePacket(nHpNo);
+        SendKeyFramePacket();
 
         printf("THREAD IS RUNNING\n");
     }
@@ -254,25 +255,11 @@ bool MIR_Client::StartRunClientThread(int nHpNo, int nMirroringPort, int nContro
 
 void MIR_Client::StopRunClientThread() {
     if( m_tID != NULL || IsThreadRunning() ) {
-        SetDoExitRunClientThread(true);
-
         // 미러링 off 패킷을 보내지 않고 mirroring이 종료되면 <crash>가 발생하므로
         // 미러링 소켓을 닫기전에 보냄
         SendOnOffPacket(false);
 
-        if(m_mirrorSocket != INVALID_SOCKET) {
-            close(m_mirrorSocket);
-            m_mirrorSocket = INVALID_SOCKET;
-
-            printf("[VPS:%d] Closed Mirroring Socket by VPS\n", m_nHpNo);
-        }
-
-        if(m_controlSocket != INVALID_SOCKET) {
-            close(m_controlSocket);
-            m_controlSocket = INVALID_SOCKET;
-
-            printf("[VPS:%d] Closed Control Socket byte VPS\n", m_nHpNo);
-        }
+        CleanUpRunClientThreadData();
     }
 }
 
@@ -339,7 +326,6 @@ int MIR_Client::GetControlPort() {
 }
 
 int MIR_Client::SendToControlSocket(const char* buf, int len) {
-    printf("[VPS:%d] SendToControlSocket : %d\n", m_nHpNo, len);
     int ret = (int)write(m_controlSocket, buf, len);
     return ret;
 }
@@ -347,8 +333,9 @@ int MIR_Client::SendToControlSocket(const char* buf, int len) {
 int MIR_Client::SendOnOffPacket(bool onoff) {
     if(m_controlSocket != INVALID_SOCKET) {
         int size = 0;
-        ONYPACKET_UINT8* ptrData = MakeOnyPacketOnOff(m_nHpNo, onoff, size);
+        BYTE* ptrData = MakeOnyPacketOnOff(onoff, size);
         if(size != 0) {
+            printf("[VPS:%d] Send OnOff Packet : %s\n", m_nHpNo, onoff ? "true" : "false");
             return SendToControlSocket((const char*)ptrData, size);
         }
     }
@@ -356,11 +343,12 @@ int MIR_Client::SendOnOffPacket(bool onoff) {
     return 0;
 }
 
-int MIR_Client::SendKeyFramePacket(int nHpNo) {
+int MIR_Client::SendKeyFramePacket() {
     if(m_controlSocket != INVALID_SOCKET) {
         int size = 0;
-        ONYPACKET_UINT8* ptrData = MakeOnyPacketKeyFrame(m_nHpNo, size);
+        BYTE* ptrData = MakeOnyPacketKeyFrame(size);
         if(size != 0) {
+            printf("[VPS:%d] Send Keyframe Packet\n", m_nHpNo);
             return SendToControlSocket((const char*)ptrData, size);
         }
     }
@@ -368,13 +356,13 @@ int MIR_Client::SendKeyFramePacket(int nHpNo) {
     return 0;
 }
 
-ONYPACKET_UINT8* MIR_Client::MakeOnyPacketKeyFrame(int nHpNo, int& size) {
+BYTE* MIR_Client::MakeOnyPacketKeyFrame(int& size) {
     int dataSum = 0;
     int sizeofData = 0;
 
     memset(m_sendBuf, 0x00, SEND_BUF_SIZE);
 
-    ONYPACKET_UINT8 mStartFlag = CMD_START_CODE;
+    BYTE mStartFlag = CMD_START_CODE;
     sizeofData = sizeof(mStartFlag);
     memcpy(m_sendBuf, (char*)&mStartFlag, sizeofData);
     dataSum = sizeofData;
@@ -389,17 +377,17 @@ ONYPACKET_UINT8* MIR_Client::MakeOnyPacketKeyFrame(int nHpNo, int& size) {
     memcpy(m_sendBuf + dataSum, (char*)&mCommandCode, sizeofData);
     dataSum += sizeofData;
 
-    ONYPACKET_UINT8 mDeviceNo = (ONYPACKET_UINT8)nHpNo;
+    BYTE mDeviceNo = (BYTE)m_nHpNo;
     sizeofData = sizeof(mDeviceNo);
     memcpy(m_sendBuf + dataSum, (char*)&mDeviceNo, sizeofData);
     dataSum += sizeofData;
 
-    ONYPACKET_UINT16 mChecksum = htons( calChecksum((ONYPACKET_UINT16*)(m_sendBuf + 1), ntohl(mDataSize) + CMD_HEAD_SIZE - 1) );
+    ONYPACKET_UINT16 mChecksum = htons( CalChecksum((ONYPACKET_UINT16*)(m_sendBuf + 1), ntohl(mDataSize) + CMD_HEAD_SIZE - 1) );
     sizeofData = sizeof(mChecksum);
     memcpy(m_sendBuf + dataSum, (char*)&mChecksum, sizeofData);
     dataSum += sizeofData;
 
-    ONYPACKET_UINT8 mEndFlag = CMD_END_CODE;
+    BYTE mEndFlag = CMD_END_CODE;
     sizeofData = sizeof(mEndFlag);
     memcpy(m_sendBuf + dataSum, (char*)&mEndFlag, sizeofData);
     dataSum += sizeofData;
@@ -409,13 +397,13 @@ ONYPACKET_UINT8* MIR_Client::MakeOnyPacketKeyFrame(int nHpNo, int& size) {
     return m_sendBuf;
 }
 
-ONYPACKET_UINT8* MIR_Client::MakeOnyPacketOnOff(int nHpNo, bool onoff, int& size) {
+BYTE* MIR_Client::MakeOnyPacketOnOff(bool onoff, int& size) {
     int dataSum = 0;
     int sizeofData = 0;
 
     memset(m_sendBuf, 0x00, SEND_BUF_SIZE);
 
-    ONYPACKET_UINT8 mStartFlag = CMD_START_CODE;
+    BYTE mStartFlag = CMD_START_CODE;
     sizeofData = sizeof(mStartFlag);
     memcpy(m_sendBuf, (char*)&mStartFlag, sizeofData);
     dataSum = sizeofData;
@@ -430,22 +418,22 @@ ONYPACKET_UINT8* MIR_Client::MakeOnyPacketOnOff(int nHpNo, bool onoff, int& size
     memcpy(m_sendBuf + dataSum, (char*)&mCommandCode, sizeofData);
     dataSum += sizeofData;
 
-    ONYPACKET_UINT8 mDeviceNo = (ONYPACKET_UINT8)nHpNo;
+    BYTE mDeviceNo = (BYTE)m_nHpNo;
     sizeofData = sizeof(mDeviceNo);
     memcpy(m_sendBuf + dataSum, (char*)&mDeviceNo, sizeofData);
     dataSum += sizeofData;
 
-    ONYPACKET_UINT8 mOnOff = onoff ? 1 : 0;
+    BYTE mOnOff = onoff ? 1 : 0;
     sizeofData = sizeof(mOnOff);
     memcpy(m_sendBuf + dataSum, (char*)&mOnOff, sizeofData);
     dataSum += sizeofData;
 
-    ONYPACKET_UINT16 mChecksum = htons( calChecksum((ONYPACKET_UINT16*)(m_sendBuf + 1), ntohl(mDataSize) + CMD_HEAD_SIZE - 1) );
+    ONYPACKET_UINT16 mChecksum = htons( CalChecksum((ONYPACKET_UINT16*)(m_sendBuf + 1), ntohl(mDataSize) + CMD_HEAD_SIZE - 1) );
     sizeofData = sizeof(mChecksum);
     memcpy(m_sendBuf + dataSum, (char*)&mChecksum, sizeofData);
     dataSum += sizeofData;
 
-    ONYPACKET_UINT8 mEndFlag = CMD_END_CODE;
+    BYTE mEndFlag = CMD_END_CODE;
     sizeofData = sizeof(mEndFlag);
     memcpy(m_sendBuf + dataSum, (char*)&mEndFlag, sizeofData);
     dataSum += sizeofData;

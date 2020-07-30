@@ -18,7 +18,7 @@ VPSJpeg::~VPSJpeg() {
 
 }
 
-int VPSJpeg::RotateLeft(ONYPACKET_UINT8* pJpgSrc, int nJpgSrcLen, int quality) {
+int VPSJpeg::RotateLeft(BYTE* pJpgSrc, int nJpgSrcLen, int quality) {
     Mat rawData = Mat(1, nJpgSrcLen, CV_8SC1, (void*)pJpgSrc).clone();
     Mat rawImage = imdecode(rawData, 1);
 
@@ -37,7 +37,7 @@ int VPSJpeg::RotateLeft(ONYPACKET_UINT8* pJpgSrc, int nJpgSrcLen, int quality) {
     return buff.size();
 }
 
-int VPSJpeg::RotateRight(ONYPACKET_UINT8* pJpgSrc, int nJpgSrcLen, int quality) {
+int VPSJpeg::RotateRight(BYTE* pJpgSrc, int nJpgSrcLen, int quality) {
     Mat rawData = Mat(1, nJpgSrcLen, CV_8SC1, (void*)pJpgSrc).clone();
     Mat rawImage = imdecode(rawData, 1);
 

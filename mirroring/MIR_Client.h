@@ -8,7 +8,6 @@
 typedef bool (*PMIRRORING_ROUTINE)(void* pMirroringPacket);
 typedef void (*PMIRRORING_STOP_ROUTINE)(int nHpNo, int nStopCode);
 
-#define SEND_BUF_SIZE   512
 #define RECV_BUF_SIZE   (2 * 1024 * 1024)
 
 enum {
@@ -43,21 +42,21 @@ public:
     int GetControlPort();
 
     int SendOnOffPacket(bool onoff);
-    int SendKeyFramePacket(int nHpNo);
+    int SendKeyFramePacket();
 
     bool GetData(int efd, Socket sock, int waitms);
 
 private:
     int SendToControlSocket(const char* buf, int len);
 
-    ONYPACKET_UINT8* MakeOnyPacketKeyFrame(int nHpNo, int& size);
-    ONYPACKET_UINT8* MakeOnyPacketOnOff(int nHpNo, bool onoff, int& size);
+    BYTE* MakeOnyPacketKeyFrame(int& size);
+    BYTE* MakeOnyPacketOnOff(bool onoff, int& size);
 
 public:
     int m_mirrorSocket;
     int m_controlSocket;
 
-    ONYPACKET_UINT8* m_pRcvBuf;
+    BYTE* m_pRcvBuf;
 
 private:
     PMIRRORING_ROUTINE m_pMirroringRoutine;
@@ -79,7 +78,7 @@ private:
     // bool m_isHeadOfFrame;
     // bool m_isFirstImage;
 
-    ONYPACKET_UINT8 m_sendBuf[SEND_BUF_SIZE];
+    BYTE m_sendBuf[SEND_BUF_SIZE];
 
     int m_pos;
     //int m_iWrite;

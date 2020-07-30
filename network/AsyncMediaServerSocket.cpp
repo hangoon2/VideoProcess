@@ -52,8 +52,7 @@ void AsyncMediaServerSocket::UpdateEvents(int efd, Socket sock, int events, bool
     //     EV_SET(&ev[n++], fd, EVFILT_WRITE, EV_DELETE, 0, 0, (void *)(intptr_t)fd);
     // }
 
-    printf("%s Socket %d events read %d\n",
-            modify ? "mod" : "add", sock, events & kReadEvent);
+//    printf("%s Socket %d events read %d\n", modify ? "mod" : "add", sock, events & kReadEvent);
     int r = kevent(efd, ev, n, NULL, 0, NULL);
     exit_if(r, "kevent failed");
 }
@@ -118,7 +117,7 @@ bool AsyncMediaServerSocket::OnClose(Socket sock) {
     return false;
 }
 
-bool AsyncMediaServerSocket::OnSend(Socket sock, ONYPACKET_UINT8* pData, int iLen, bool force) {
+bool AsyncMediaServerSocket::OnSend(Socket sock, BYTE* pData, int iLen, bool force) {
     int ret = (int)write(sock, pData, iLen);
     if(ret != iLen) {
         return false;
@@ -191,8 +190,8 @@ ClientObject* AsyncMediaServerSocket::FindHost(int nHpNo) {
     return m_clientList.FindHost(nHpNo);
 }
 
-ClientObject* AsyncMediaServerSocket::FindUnknown() {
-    return m_clientList.FindUnknown();
+ClientObject* AsyncMediaServerSocket::FindGuest(int nHpNo, char* id) {
+    return m_clientList.FindGuest(nHpNo, id);
 }
 
 ClientObject* AsyncMediaServerSocket::GetMobileController() {

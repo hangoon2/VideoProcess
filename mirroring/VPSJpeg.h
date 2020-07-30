@@ -8,8 +8,8 @@ public:
     VPSJpeg();
     virtual ~VPSJpeg();
 
-    int RotateLeft(ONYPACKET_UINT8* pJpgSrc, int nJpgSrcLen, int quality);
-    int RotateRight(ONYPACKET_UINT8* pJpgSrc, int nJpgSrcLen, int quality);
+    int RotateLeft(BYTE* pJpgSrc, int nJpgSrcLen, int quality);
+    int RotateRight(BYTE* pJpgSrc, int nJpgSrcLen, int quality);
 };
 
 #endif

@@ -11,11 +11,12 @@ public:
     bool StartMirroring(int nHpNo, PMIRRORING_ROUTINE pMirroringRoutine, PMIRRORING_STOP_ROUTINE pMirroringStopRoutine);
     void StopMirroring(int nHpNo);
 
-    void HandleJpegPacket(ONYPACKET_UINT8* pPacket, int iDataLen, short usCmd, int nHpNo);
-    void HandleJpegCaptureFailedPacket(ONYPACKET_UINT8* pPacket, int nHpNo);
+    void HandleJpegPacket(BYTE* pPacket, int iDataLen, short usCmd, int nHpNo);
+    void HandleJpegCaptureFailedPacket(BYTE* pPacket, int nHpNo);
     void OnMirrorStopped(int nHpNo, int nStopCode);
 
     void SendKeyFrame(int nHpNo);
+    void SendControlPacket(int nHpNo, BYTE* pData, int iDataLen);
 
     void SetDeviceOrientation(int nHpNo, int deviceOrientation);
 

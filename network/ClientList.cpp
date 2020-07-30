@@ -37,7 +37,9 @@ ClientObject* ClientList::Find(Socket sock) {
 void ClientList::Delete(Socket sock) {
     ClientObject* pClient = Find(sock);
     if(pClient != NULL) {
-        if(pClient->m_nClientType == CLIENT_TYPE_HOST 
+        if(pClient->m_nClientType == CLIENT_TYPE_MC) {
+            m_mobileController = NULL;
+        } else if(pClient->m_nClientType == CLIENT_TYPE_HOST 
             || pClient->m_nClientType == CLIENT_TYPE_GUEST 
             || pClient->m_nClientType == CLIENT_TYPE_MONITOR) {
             DeleteClient(pClient);
@@ -48,22 +50,29 @@ void ClientList::Delete(Socket sock) {
 }
 
 ClientObject* ClientList::FindHost(int nHpNo) {
-    for(auto it = m_clientMap.begin(); it != m_clientMap.end(); it++) {
-        ClientObject* pClient = it->second;
-        if(pClient->m_nHpNo == nHpNo && pClient->m_nClientType == CLIENT_TYPE_HOST) {
+    ClientObject** clientList = m_clientList[nHpNo - 1];
+    for(int i = 0; i < MAXCLIENT_PER_CH; i++) {
+        ClientObject* pClient = clientList[i];
+        if(pClient == NULL) continue;
+
+        if(pClient->m_nClientType == CLIENT_TYPE_HOST) {
             return pClient;
-        }        
+        }
     }
 
     return NULL;
 }
 
-ClientObject* ClientList::FindUnknown() {
-    for(auto it = m_clientMap.begin(); it != m_clientMap.end(); it++) {
-        ClientObject* pClient = it->second;
-        if(pClient->m_nHpNo == 0 && pClient->m_nClientType == CLIENT_TYPE_UNKNOWN) {
+ClientObject* ClientList::FindGuest(int nHpNo, char* id) {
+    ClientObject** clientList = m_clientList[nHpNo - 1];
+    for(int i = 0; i < MAXCLIENT_PER_CH; i++) {
+        ClientObject* pClient = clientList[i];
+        if(pClient == NULL) continue;
+
+        if(pClient->m_nClientType == CLIENT_TYPE_GUEST 
+            && strcmp(pClient->m_strID, id) == 0) {
             return pClient;
-        }        
+        }
     }
 
     return NULL;

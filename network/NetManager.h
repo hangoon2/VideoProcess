@@ -18,14 +18,13 @@ public:
     bool OnReadEx(ClientObject* pClient, char* pRcvData, int len);
 
     bool IsOnService(int nHpNo);
-    bool IsReceivedRecordStartCommand(int nHpNo);
 
     void UpdateState(int id);
 
 private:
-    bool SendToMobileController(ONYPACKET_UINT8* pData, int iLen, bool force = false);
-    bool SendToClient(short usCmd, int nHpNo, ONYPACKET_UINT8* pData, int iLen, int iKeyFrameNo);
-    bool Send(ONYPACKET_UINT8* pData, int iLen, ClientObject* pClient, bool force);
+    bool SendToMobileController(BYTE* pData, int iLen, bool force = false);
+    bool SendToClient(short usCmd, int nHpNo, BYTE* pData, int iLen, int iKeyFrameNo);
+    bool Send(BYTE* pData, int iLen, ClientObject* pClient, bool force);
 
     bool CloseClient(ClientObject* pClient);
     bool WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, int len);
@@ -36,9 +35,10 @@ private:
     Mirroring m_mirror;
 
     bool m_isOnService[MAXCHCNT];
-    bool m_isReceivedRecordStartCommand[MAXCHCNT];
     bool m_isJpgCapture[MAXCHCNT];
 
+    int m_nRecordStartCommandCountReceived[MAXCHCNT];
+    int m_nRecordStopCommandCountReceived[MAXCHCNT];
     int m_nCaptureCommandReceivedCount[MAXCHCNT];
 
     int m_iRefreshCH[MAXCHCNT];

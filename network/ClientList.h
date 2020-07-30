@@ -19,7 +19,7 @@ public:
     void Delete(Socket sock);
 
     ClientObject* FindHost(int nHpNo);
-    ClientObject* FindUnknown();
+    ClientObject* FindGuest(int nHpNo, char* id);
 
     void UpdateClient(ClientObject* pClient);
 
