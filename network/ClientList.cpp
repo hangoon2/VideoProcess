@@ -86,7 +86,6 @@ void ClientList::UpdateClient(ClientObject* pClient) {
         for(int i = 0; i < MAXCLIENT_PER_CH; i++) {
             if(m_clientList[nHpNo - 1][i] == NULL) {
                 m_clientList[nHpNo - 1][i] = pClient;
-                printf("UPDATE CLIENT LIST\n");
                 break;
             }
         }
@@ -97,7 +96,6 @@ void ClientList::DeleteClient(ClientObject* pClinet) {
     int nHpNo = pClinet->m_nHpNo;
     for(int i = 0; i < MAXCLIENT_PER_CH; i++) {
         if(m_clientList[nHpNo - 1][i] == pClinet) {
-            printf("DELETE CLIENT LIST\n");
             m_clientList[nHpNo - 1][i] = NULL;
             break;
         }

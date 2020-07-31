@@ -37,8 +37,6 @@ void DoMirrorStoppedCallback(int nHpNo, int nStopCode) {
 }
 
 NetManager::NetManager() {
-    printf("Call NetManager Constructor\n");
-
     for(int i = 0; i < MAXCHCNT; i++) {
         m_isOnService[i] = false;
         
@@ -49,6 +47,8 @@ NetManager::NetManager() {
         m_iRefreshCH[i] = 1;
     }
 
+    memset(m_strAviSavePath, 0x00, sizeof(m_strAviSavePath));
+
     pNetMgr = this;
 
     m_timer_1.Start(TIMERID_JPGFPS_1SEC, OnTimer);
@@ -56,13 +56,13 @@ NetManager::NetManager() {
 }
 
 NetManager::~NetManager() {
-    printf("Call NetManager Destructor\n");
-
     m_timer_1.Stop();
     m_timer_10.Stop();
 }
 
 void NetManager::OnServerModeStart() {
+    GetPrivateProfileString(VPS_SZ_SECTION_CAPTURE, VPS_SZ_KEY_AVI_PATH, "", m_strAviSavePath);
+
     int server = m_VPSSvr.InitSocket(10001, ::OnReadEx);
     if(server <= 0) {
         printf("Media Server Socket 생성 실패\n");
@@ -202,6 +202,13 @@ bool NetManager::IsOnService(int nHpNo) {
     return m_isOnService[nHpNo - 1];
 }
 
+void NetManager::ClientConnected(ClientObject* pClient) {
+    m_VPSSvr.UpdateClientList(pClient);
+
+    const char* strClientType = pClient->GetClientTypeString();
+    printf("[VPS:%d] %s is connected.\n", pClient->m_nHpNo, strClientType);
+}
+
 bool NetManager::SendToMobileController(BYTE* pData, int iLen, bool force) {
     ClientObject* pMobileController = m_VPSSvr.GetMobileController();
     return Send(pData, iLen, pMobileController, force);
@@ -263,7 +270,7 @@ bool NetManager::Send(BYTE* pData, int iLen, ClientObject* pClient, bool force) 
 }
 
 bool NetManager::JPGCaptureAndSend(int nHpNo, BYTE* pJpgData, int iJpgDataLen) {
-    char filePath[256] = {0,};
+    char filePath[512] = {0,};
     char fileName[DEFAULT_STRING_SIZE] = {0,};
 
     SYSTEM_TIME stTime;
@@ -274,7 +281,7 @@ bool NetManager::JPGCaptureAndSend(int nHpNo, BYTE* pJpgData, int iJpgDataLen) {
             stTime.year, stTime.month, stTime.day,
             stTime.hour, stTime.minute, stTime.second, stTime.millisecond);
 
-    sprintf(filePath, "/Users/hangoon2/onycom/shared/%d/%s", nHpNo, fileName);
+    sprintf(filePath, "%s/%d/%s", m_strAviSavePath, nHpNo, fileName);
 
     VPSJpeg jpegEncoder;
     if( jpegEncoder.SaveJpeg(filePath, pJpgData, iJpgDataLen, 90) ) {
@@ -356,19 +363,13 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
             // Mobile Controller
             if( !strcmp(pClient->m_strID, MOBILE_CONTROLL_ID) ) {
                 pClient->m_nClientType = CLIENT_TYPE_MC;
-
-                printf("[VPS:0] Connected Mobile Controller\n");
             } else {
                 pClient->m_nClientType = CLIENT_TYPE_HOST;
 
                 m_iRefreshCH[nHpNo - 1] = 1;   // 전체 영상 전송
-
-                printf("[VPS:%d] Connected Host : %s\n", nHpNo, pClient->m_strID);
             }
 
-            m_VPSSvr.UpdateClientList(pClient);
-
-            ret = true;
+            ClientConnected(pClient);
         }
         break;
 
@@ -395,7 +396,7 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
                 Send(pSendData, totLen, pHost, false);
             }
 
-            m_VPSSvr.UpdateClientList(pClient);
+            ClientConnected(pClient);
         }
         break;
 
@@ -405,7 +406,7 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
             pClient->m_nClientType = CLIENT_TYPE_MONITOR;
             m_iRefreshCH[nHpNo - 1] = 1;    // 전체 영상 전송
 
-            m_VPSSvr.UpdateClientList(pClient);
+            ClientConnected(pClient);
         }
         break;
 
@@ -582,7 +583,7 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
         break;
 
         default: {
-            SendToMobileController((BYTE*)pRcvData, len);
+            return SendToMobileController((BYTE*)pRcvData, len);
         }
         break;
     }

@@ -243,8 +243,6 @@ void Mirroring::SendControlPacket(int nHpNo, BYTE* pData, int len) {
     short usCmd = ntohs( *(short*)&pData[5] );
     if(usCmd == CMD_PLAYER_QUALITY) {
         m_nJpgQuality[nHpNo - 1] = ntohs( *(short*)&pData[8] );
-
-        printf("JPG QUALITY CHANGED : %d\n", m_nJpgQuality[nHpNo - 1]);
     }
 
     m_mirClient[nHpNo - 1].SendToControlSocket((const char*)pData, len);
@@ -252,4 +250,6 @@ void Mirroring::SendControlPacket(int nHpNo, BYTE* pData, int len) {
 
 void Mirroring::SetDeviceOrientation(int nHpNo, int deviceOrientation) {
     m_nDeviceOrientation[nHpNo - 1] = deviceOrientation;
+
+    printf("[VPS:%d] 영상 %s 모드 출력\n", nHpNo, deviceOrientation == 1 ? "세로" : "가로");
 }

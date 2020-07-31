@@ -39,6 +39,8 @@ public:
     void Lock();
     void Unlock();
 
+    const char* GetClientTypeString();
+
 private:
     pthread_mutex_t m_lock;
 };

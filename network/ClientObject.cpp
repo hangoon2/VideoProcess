@@ -5,8 +5,6 @@
 #include <string.h>
 
 ClientObject::ClientObject() {
-    printf("Call ClientObject Constructor\n");
-
     m_rcvCommandBuffer = new char[RECV_BUFFER_SIZE];
     m_rcvPos = 0;
 
@@ -26,8 +24,7 @@ ClientObject::ClientObject() {
 }
 
 ClientObject::~ClientObject() {
-    printf("Call ClientObject Destructor\n");
-    printf("Socket %d closed\n", m_clientSock);
+    printf("[VPS:%d] Socket %d closed\n", m_nHpNo, m_clientSock);
     close(m_clientSock);
 
     m_clientSock = INVALID_SOCKET;
@@ -41,4 +38,22 @@ void ClientObject::Lock() {
 
 void ClientObject::Unlock() {
     pthread_mutex_unlock(&m_lock);
+}
+
+const char* ClientObject::GetClientTypeString() {
+    switch(m_nClientType) {
+        case CLIENT_TYPE_MC:
+        return VPS_SZ_MOBILE_CONTROLLER;
+
+        case CLIENT_TYPE_HOST:
+        return VPS_SZ_CLIENT_HOST;
+
+        case CLIENT_TYPE_GUEST:
+        return VPS_SZ_CLIENT_GUEST;
+
+        case CLIENT_TYPE_MONITOR:
+        return VPS_SZ_CLIENT_MONITOR;
+    }
+
+    return VPS_SZ_CLIENT_UNKNOWN;
 }

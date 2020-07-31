@@ -35,6 +35,15 @@ typedef long long       ONYPACKET_INT64;
 #define VPS_SZ_JPG_CREATION_FAIL    "JPG_CREATION_FAIL"
 #define VPS_SZ_MP4_CREATION_FAIL    "MP4_CREATION_FAIL"
 
+#define VPS_SZ_SECTION_CAPTURE      "[CaptureImage]"            
+#define VPS_SZ_KEY_AVI_PATH         "AVISavePath"
+
+#define VPS_SZ_MOBILE_CONTROLLER    "Device Controller"
+#define VPS_SZ_CLIENT_HOST          "Host"
+#define VPS_SZ_CLIENT_GUEST         "Guest"
+#define VPS_SZ_CLIENT_MONITOR       "Monitor"
+#define VPS_SZ_CLIENT_UNKNOWN       "Unknown"
+
 /* ////////////////////////////////////////
 //             command code              //
 /////////////////////////////////////////*/
@@ -122,5 +131,7 @@ BYTE* MakeSendData2(short usCmd, int nHpNo, int dataLen, BYTE* pData, BYTE* pDst
 void GetLocalTime(SYSTEM_TIME &stTime);
 
 bool DoesFileExist(const char* filePath);
+
+void GetPrivateProfileString(const char* section, const char* key, const char* defaultValue, char* value);
 
 #endif

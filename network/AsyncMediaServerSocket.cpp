@@ -17,14 +17,10 @@ const int kReadEvent = 1;
 const int kWriteEvent = 2;
 
 AsyncMediaServerSocket::AsyncMediaServerSocket() {
-    printf("Call AsyncMediaServerSocket Constructor\n");
-
     m_pOnReadEx = NULL;
 }
 
 AsyncMediaServerSocket::~AsyncMediaServerSocket() {
-    printf("Call AsyncMediaServerSocket Destructor\n");
-
     m_clientList.Clear();
 }
 
@@ -79,7 +75,7 @@ void AsyncMediaServerSocket::OnAccept(int efd, ServerSocket serverSock) {
 
     m_clientList.Insert(clientSock, pClient);
 
-    printf("Accept : %s\n", pClient->m_strIPAddr);
+    printf("[VPS:0] Accept : %s\n", pClient->m_strIPAddr);
 
     //write( clientSock, "connect server", sizeof("connect server") );
 }
@@ -174,7 +170,7 @@ int AsyncMediaServerSocket::InitSocket(int port, PDATA_READ_ROUTINE pOnReadEx) {
     r = listen(listenfd, 20);
     exit_if(r, "listen failed %d %s", errno, strerror(errno));
 
-    printf("fd %d listening at %d\n", listenfd, port);
+    printf("[VPS:0] VPS Server listening at %d\n", port);
 
     SetNonBlock(listenfd);
     UpdateEvents(epollfd, listenfd, kReadEvent, false);

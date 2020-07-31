@@ -237,17 +237,15 @@ bool MIR_Client::StartRunClientThread(int nHpNo, int nMirroringPort, int nContro
             //     sleep(1);
             // }
 
-            printf("Mirroring thread create success\n");
+            printf("[VPS:%d] Mirroring thread create success\n", nHpNo);
 
             ret = true;
         } else {
-            printf("Mirroring thread creation fail[%d]\n", errno);
+            printf("[VPS:%d] Mirroring thread creation fail[%d]\n", nHpNo, errno);
         }
     } else {
         // send key frame
         SendKeyFramePacket();
-
-        printf("THREAD IS RUNNING\n");
     }
 
     return ret;
@@ -335,7 +333,7 @@ int MIR_Client::SendOnOffPacket(bool onoff) {
         int size = 0;
         BYTE* ptrData = MakeOnyPacketOnOff(onoff, size);
         if(size != 0) {
-            printf("[VPS:%d] Send OnOff Packet : %s\n", m_nHpNo, onoff ? "true" : "false");
+//            printf("[VPS:%d] Send OnOff Packet : %s\n", m_nHpNo, onoff ? "true" : "false");
             return SendToControlSocket((const char*)ptrData, size);
         }
     }
@@ -348,7 +346,7 @@ int MIR_Client::SendKeyFramePacket() {
         int size = 0;
         BYTE* ptrData = MakeOnyPacketKeyFrame(size);
         if(size != 0) {
-            printf("[VPS:%d] Send Keyframe Packet\n", m_nHpNo);
+//            printf("[VPS:%d] Send Keyframe Packet\n", m_nHpNo);
             return SendToControlSocket((const char*)ptrData, size);
         }
     }

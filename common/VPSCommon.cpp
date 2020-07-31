@@ -5,6 +5,9 @@
 #include <sys/time.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <fstream>
+
+using namespace std;
 
 ONYPACKET_UINT16 CalChecksum(unsigned short* ptr, int nbytes) {
     ONYPACKET_INT32 sum;
@@ -109,4 +112,34 @@ void GetLocalTime(SYSTEM_TIME &stTime) {
 
 bool DoesFileExist(const char* filePath) {
     return access(filePath, 0) == 0;
+}
+
+void GetPrivateProfileString(const char* section, const char* key, const char* defaultValue, char* value) {
+    ifstream file;
+    file.open("Setup.ini");
+    if( file.is_open() ) {
+        char line[256] = {0,};
+        bool findSection = false;
+        bool findKey = false;
+
+        while( file.getline(line, sizeof(line) ) ) {
+            int ret = strncmp( line, section, strlen(section) );
+            if( strncmp( line, section, strlen(section) ) == 0 ) {
+                findSection = true;
+            }
+
+            if( findSection && strncmp( line, key, strlen(key) ) == 0 ) {
+                strcpy(value, &line[strlen(key) + 1]);
+                value[strlen(value) - 1] = '\0';
+                findKey = true;
+                break;
+            }
+        }
+
+        if(!findKey) {
+            strcpy(value, defaultValue);
+        }
+    }
+
+    file.close();
 }

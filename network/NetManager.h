@@ -22,6 +22,7 @@ public:
     void UpdateState(int id);
 
 private:
+    void ClientConnected(ClientObject* pClient);
     bool SendToMobileController(BYTE* pData, int iLen, bool force = false);
     bool SendToClient(short usCmd, int nHpNo, BYTE* pData, int iLen, int iKeyFrameNo);
     bool Send(BYTE* pData, int iLen, ClientObject* pClient, bool force);
@@ -35,6 +36,8 @@ private:
     AsyncMediaServerSocket m_VPSSvr;
 
     Mirroring m_mirror;
+
+    char m_strAviSavePath[256];
 
     bool m_isOnService[MAXCHCNT];
     bool m_isJpgCapture[MAXCHCNT];
