@@ -16,7 +16,7 @@ public:
     void OnMirrorStopped(int nHpNo, int nStopCode);
 
     void SendKeyFrame(int nHpNo);
-    void SendControlPacket(int nHpNo, BYTE* pData, int iDataLen);
+    void SendControlPacket(int nHpNo, BYTE* pData, int len);
 
     void SetDeviceOrientation(int nHpNo, int deviceOrientation);
 
@@ -25,6 +25,8 @@ private:
     PMIRRORING_STOP_ROUTINE m_pMirroringStopRoutine[MAXCHCNT];
 
     int m_nDeviceOrientation[MAXCHCNT];
+
+    int m_nJpgQuality[MAXCHCNT];
 
     int m_nKeyFrameW[MAXCHCNT];
     int m_nKeyFrameH[MAXCHCNT];

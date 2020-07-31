@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static Mirroring* pMirroring = NULL;
+static Mirroring* gs_pMirroring = NULL;
 
 bool MirroringCallback(void* pMirroringPacket) {
     BYTE* pPacket = (BYTE*)pMirroringPacket;
@@ -17,16 +17,16 @@ bool MirroringCallback(void* pMirroringPacket) {
     }
 
     if(usCmd == CMD_MIRRORING_CAPTURE_FAILED) {
-        pMirroring->HandleJpegCaptureFailedPacket(pPacket, nHpNo);
+        gs_pMirroring->HandleJpegCaptureFailedPacket(pPacket, nHpNo);
     } else {
-        pMirroring->HandleJpegPacket(pPacket, iDataLen, usCmd, nHpNo);
+        gs_pMirroring->HandleJpegPacket(pPacket, iDataLen, usCmd, nHpNo);
     }
 
     return false;
 }
 
 void MirrorStoppedCallback(int nHpNo, int nStopCode) {
-    pMirroring->OnMirrorStopped(nHpNo, nStopCode);
+    gs_pMirroring->OnMirrorStopped(nHpNo, nStopCode);
 }
 
 Mirroring::Mirroring() {
@@ -36,11 +36,13 @@ Mirroring::Mirroring() {
 
         m_nDeviceOrientation[i] = 1;
 
+        m_nJpgQuality[i] = VPS_DEFAULT_JPG_QUALITY;
+
         m_nKeyFrameW[i] = 0;
         m_nKeyFrameH[i] = 0;
     }
 
-    pMirroring = this;
+    gs_pMirroring = this;
 }
 
 Mirroring::~Mirroring() {
@@ -117,7 +119,7 @@ void Mirroring::HandleJpegPacket(BYTE* pPacket, int iDataLen, short usCmd, int n
         if(usCmd == CMD_JPG_DEV_VERT_IMG_VERT || usCmd == CMD_JPG_DEV_VERT_IMG_HORI) {
             VPSJpeg vpsJpeg;
 
-            int nNewJpgDataSize = vpsJpeg.RotateRight(pJpgData, nJpgDataSize, 90);
+            int nNewJpgDataSize = vpsJpeg.RotateRight(pJpgData, nJpgDataSize, m_nJpgQuality[nHpNo - 1]);
             if(nNewJpgDataSize > 0) {
                 *(short*)&pPacket[16] = htons(nShorterKeyFrameLength - nBottom);
                 *(short*)&pPacket[18] = htons(nLeft);
@@ -165,7 +167,7 @@ void Mirroring::HandleJpegPacket(BYTE* pPacket, int iDataLen, short usCmd, int n
         if( (usCmd == CMD_JPG_DEV_HORI_IMG_HORI || usCmd == CMD_JPG_DEV_HORI_IMG_VERT) && !isWideDevice ) {
             VPSJpeg vpsJpeg;
 
-            int nNewJpgDataSize = vpsJpeg.RotateLeft(pJpgData, nJpgDataSize, 90);
+            int nNewJpgDataSize = vpsJpeg.RotateLeft(pJpgData, nJpgDataSize, m_nJpgQuality[nHpNo - 1]);
             if(nNewJpgDataSize > 0) {
                 *(short*)&pPacket[16] = htons(nTop);
                 *(short*)&pPacket[18] = htons(nShorterKeyFrameLength - nRight);
@@ -181,7 +183,7 @@ void Mirroring::HandleJpegPacket(BYTE* pPacket, int iDataLen, short usCmd, int n
         } else if( usCmd == CMD_JPG_DEV_VERT_IMG_VERT && isWideDevice ) {
             VPSJpeg vpsJpeg;
 
-            int nNewJpgDataSize = vpsJpeg.RotateLeft(pJpgData, nJpgDataSize, 90);
+            int nNewJpgDataSize = vpsJpeg.RotateLeft(pJpgData, nJpgDataSize, m_nJpgQuality[nHpNo - 1]);
             if(nNewJpgDataSize > 0) {
                 *(short*)&pPacket[16] = htons(nTop);
                 *(short*)&pPacket[18] = htons(nLongerKeyFrameLength - nRight);
@@ -197,7 +199,7 @@ void Mirroring::HandleJpegPacket(BYTE* pPacket, int iDataLen, short usCmd, int n
         } else if( usCmd == CMD_JPG_DEV_VERT_IMG_HORI && isWideDevice ) {
             VPSJpeg vpsJpeg;
 
-            int nNewJpgDataSize = vpsJpeg.RotateRight(pJpgData, nJpgDataSize, 90);
+            int nNewJpgDataSize = vpsJpeg.RotateRight(pJpgData, nJpgDataSize, m_nJpgQuality[nHpNo - 1]);
             if(nNewJpgDataSize > 0) {
                 *(short*)&pPacket[16] = htons(nShorterKeyFrameLength - nBottom);
                 *(short*)&pPacket[18] = htons(nLeft);
@@ -237,9 +239,16 @@ void Mirroring::SendKeyFrame(int nHpNo) {
     m_mirClient[nHpNo - 1].SendKeyFramePacket();
 }
 
-void Mirroring::SendControlPacket(int nHpNo, BYTE* pData, int iDataLen) {
+void Mirroring::SendControlPacket(int nHpNo, BYTE* pData, int len) {
+    short usCmd = ntohs( *(short*)&pData[5] );
+    if(usCmd == CMD_PLAYER_QUALITY) {
+        m_nJpgQuality[nHpNo - 1] = ntohs( *(short*)&pData[8] );
 
-}
+        printf("JPG QUALITY CHANGED : %d\n", m_nJpgQuality[nHpNo - 1]);
+    }
+
+    m_mirClient[nHpNo - 1].SendToControlSocket((const char*)pData, len);
+}   
 
 void Mirroring::SetDeviceOrientation(int nHpNo, int deviceOrientation) {
     m_nDeviceOrientation[nHpNo - 1] = deviceOrientation;

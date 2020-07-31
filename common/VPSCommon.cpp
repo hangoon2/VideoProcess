@@ -2,6 +2,9 @@
 
 #include <string.h>
 #include <arpa/inet.h>
+#include <sys/time.h>
+#include <stdio.h>
+#include <unistd.h>
 
 ONYPACKET_UINT16 CalChecksum(unsigned short* ptr, int nbytes) {
     ONYPACKET_INT32 sum;
@@ -67,7 +70,7 @@ BYTE* MakeSendData2(short usCmd, int nHpNo, int dataLen, BYTE* pData, BYTE* pDst
     memcpy(pDstData + dataSum, (char*)&mDeviceNo, sizeofData);
     dataSum += sizeofData;
 
-    if(dataLen > 0) {
+    if(pData != NULL) {
         sizeofData = dataLen;
         memcpy(pDstData + dataSum, pData, dataLen);
         dataSum += sizeofData;
@@ -86,4 +89,24 @@ BYTE* MakeSendData2(short usCmd, int nHpNo, int dataLen, BYTE* pData, BYTE* pDst
     totLen = dataSum;
 
     return pDstData;
+}
+
+void GetLocalTime(SYSTEM_TIME &stTime) {
+    struct timeval time;
+
+    gettimeofday(&time, 0);
+
+    struct tm* currentTime = localtime(&time.tv_sec);
+
+    stTime.year = currentTime->tm_year + 1900;
+    stTime.month = currentTime->tm_mon + 1;
+    stTime.day = currentTime->tm_mday;
+    stTime.hour = currentTime->tm_hour;
+    stTime.minute = currentTime->tm_min;
+    stTime.second = currentTime->tm_sec;
+    stTime.millisecond = time.tv_usec / 1000;
+}
+
+bool DoesFileExist(const char* filePath) {
+    return access(filePath, 0) == 0;
 }

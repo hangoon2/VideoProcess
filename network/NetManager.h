@@ -26,6 +26,8 @@ private:
     bool SendToClient(short usCmd, int nHpNo, BYTE* pData, int iLen, int iKeyFrameNo);
     bool Send(BYTE* pData, int iLen, ClientObject* pClient, bool force);
 
+    bool JPGCaptureAndSend(int nHpNo, BYTE* pJpgData, int iJpgDataLen);
+
     bool CloseClient(ClientObject* pClient);
     bool WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, int len);
 

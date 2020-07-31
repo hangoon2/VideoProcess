@@ -24,10 +24,16 @@ typedef int             ONYPACKET_INT;
 typedef long            ONYPACKET_INT32;
 typedef long long       ONYPACKET_INT64;
 
-#define MOBILE_CONTROLL_ID  "MOBILECONTROL"
+#define TIMERID_JPGFPS_1SEC         1000
+#define TIMERID_10SEC               10 * 1000
 
-#define TIMERID_JPGFPS_1SEC     1000
-#define TIMERID_10SEC           10 * 1000
+#define VPS_DEFAULT_JPG_QUALITY     70
+
+#define MOBILE_CONTROLL_ID          "MOBILECONTROL"
+
+#define VPS_SZ_JPG_CAPTURE_FAIL     "JPG_CAPTURE_FAIL"
+#define VPS_SZ_JPG_CREATION_FAIL    "JPG_CREATION_FAIL"
+#define VPS_SZ_MP4_CREATION_FAIL    "MP4_CREATION_FAIL"
 
 /* ////////////////////////////////////////
 //             command code              //
@@ -55,6 +61,8 @@ typedef long long       ONYPACKET_INT64;
 
 #define CMD_ACK                         10001
 #define CMD_LOGCAT                      10003
+
+#define CMD_CAPTURE_COMPLETED           10004
 
 #define CMD_JPG_LANDSCAPE               20001
 #define CMD_JPG_PORTRAIT                20002
@@ -94,10 +102,25 @@ typedef long long       ONYPACKET_INT64;
 /*//////////////////////////////////////////////
 //               Common Function              //
 //////////////////////////////////////////////*/
+
+struct SYSTEM_TIME {
+    int year;
+    int month;
+    int day;
+    int hour;
+    int minute;
+    int second;
+    int millisecond;
+};
+
 ONYPACKET_UINT16 CalChecksum(unsigned short* ptr, int nbytes);
 uint16_t SwapEndianU2(uint16_t wValue);
 uint32_t SwapEndianU4(uint32_t nValue);
 
 BYTE* MakeSendData2(short usCmd, int nHpNo, int dataLen, BYTE* pData, BYTE* pDstData, int& totLen);
+
+void GetLocalTime(SYSTEM_TIME &stTime);
+
+bool DoesFileExist(const char* filePath);
 
 #endif

@@ -10,6 +10,8 @@ public:
 
     int RotateLeft(BYTE* pJpgSrc, int nJpgSrcLen, int quality);
     int RotateRight(BYTE* pJpgSrc, int nJpgSrcLen, int quality);
+
+    bool SaveJpeg(char* filePath, BYTE* pJpgSrc, int nJpgSrcLen, int quality);
 };
 
 #endif

@@ -1,11 +1,13 @@
 #include "NetManager.h"
 #include "../common/VPSCommon.h"
+#include "../mirroring/VPSJpeg.h"
 
 #include <stdio.h>
+#include <unistd.h>
 
 static NetManager *pNetMgr = NULL;
 
-static BYTE gs_pBufSendDataToClient[MAXCHCNT][SEND_BUF_SIZE] = {0,};
+static BYTE gs_pBufSendDataToClient[MAXCHCNT + 1][SEND_BUF_SIZE] = {0,};
 
 void OnTimer(int id) {
     if(pNetMgr == NULL) return;
@@ -95,6 +97,29 @@ bool NetManager::BypassPacket(void* pMirroringPacket) {
         } else {
             // 전송 실패 시 키프레임을 요청한다.
             m_mirror.SendKeyFrame(nHpNo); 
+        }
+
+        if(m_isJpgCapture[nHpNo - 1] && isKeyFrame) {
+            m_isJpgCapture[nHpNo - 1] = false;
+
+            BYTE* pJpgData = pPacket + 25;
+            int nJpgDataSize = iDataLen - 17;
+
+            if(usCmd == CMD_JPG_DEV_VERT_IMG_HORI) {
+                VPSJpeg vpsJpeg;
+                int nNewJpgDataSize = vpsJpeg.RotateLeft(pJpgData, nJpgDataSize, 90);
+                if(nNewJpgDataSize > 0) {
+                    nJpgDataSize = nNewJpgDataSize;
+                }
+            } else if(usCmd == CMD_JPG_DEV_HORI_IMG_VERT) {
+                VPSJpeg vpsJpeg;
+                int nNewJpgDataSize = vpsJpeg.RotateRight(pJpgData, nJpgDataSize, 90);
+                if(nNewJpgDataSize > 0) {
+                    nJpgDataSize = nNewJpgDataSize;
+                }
+            }
+
+            return JPGCaptureAndSend(nHpNo, pJpgData, nJpgDataSize);
         }
     }
 
@@ -235,6 +260,43 @@ bool NetManager::Send(BYTE* pData, int iLen, ClientObject* pClient, bool force) 
     pClient->Unlock();
 
     return ret;
+}
+
+bool NetManager::JPGCaptureAndSend(int nHpNo, BYTE* pJpgData, int iJpgDataLen) {
+    char filePath[256] = {0,};
+    char fileName[DEFAULT_STRING_SIZE] = {0,};
+
+    SYSTEM_TIME stTime;
+    GetLocalTime(stTime);
+
+    sprintf(fileName, "%02d_%04d%02d%02d_%02d%02d%02d%03d.jpg",
+            nHpNo, 
+            stTime.year, stTime.month, stTime.day,
+            stTime.hour, stTime.minute, stTime.second, stTime.millisecond);
+
+    sprintf(filePath, "/Users/hangoon2/onycom/shared/%d/%s", nHpNo, fileName);
+
+    VPSJpeg jpegEncoder;
+    if( jpegEncoder.SaveJpeg(filePath, pJpgData, iJpgDataLen, 90) ) {
+        // 파일 존재 유무 체크
+        bool doesFileExist = DoesFileExist(filePath);
+        if(!doesFileExist) {
+            sprintf(fileName, "%s", VPS_SZ_JPG_CREATION_FAIL);
+        }
+
+        memset(gs_pBufSendDataToClient[MAXCHCNT], 0x00, SEND_BUF_SIZE);
+
+        int totLen = 0;
+        BYTE* pSendData = MakeSendData2(CMD_CAPTURE_COMPLETED, nHpNo, (int)strlen(fileName), (BYTE*)fileName, (BYTE*)gs_pBufSendDataToClient[MAXCHCNT], totLen);
+        if( SendToMobileController(pSendData, totLen) ) {
+            printf("[VPS:%d] [Capture] 단말기 화면 캡쳐 응답보냄: 성공(%s)\n", nHpNo, fileName);
+            return true;
+        } else {
+            printf("[VPS:%d] [Capture] 단말기 화면 캡쳐 응답보냄: 실패(%s)\n", nHpNo, fileName);
+        }
+    }
+
+    return false;
 }
 
 bool NetManager::CloseClient(ClientObject* pClient) {

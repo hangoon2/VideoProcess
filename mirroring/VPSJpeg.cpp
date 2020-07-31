@@ -11,7 +11,7 @@ using namespace cv;
 #include <stdio.h>
 
 VPSJpeg::VPSJpeg() {
-
+    
 }
 
 VPSJpeg::~VPSJpeg() {
@@ -54,4 +54,20 @@ int VPSJpeg::RotateRight(BYTE* pJpgSrc, int nJpgSrcLen, int quality) {
     memcpy( pJpgSrc, (const void*)reinterpret_cast<uchar*>(&buff[0]), buff.size() );
 
     return buff.size();
+}
+
+bool VPSJpeg::SaveJpeg(char* filePath, BYTE* pJpgSrc, int nJpgSrcLen, int quality) {
+    Mat rawData = Mat(1, nJpgSrcLen, CV_8SC1, (void*)pJpgSrc).clone();
+    Mat rawImage = imdecode(rawData, 1);
+
+    vector<uchar> buff;
+    vector<int> param = vector<int>(2);
+    param[0] = IMWRITE_JPEG_QUALITY;
+    param[1] = quality;
+
+    imencode(".jpg", rawImage, buff, param);
+
+    imwrite(filePath, rawImage);
+
+    return true;
 }

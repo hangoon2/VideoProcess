@@ -41,14 +41,13 @@ public:
     int GetMirrorPort();
     int GetControlPort();
 
+    int SendToControlSocket(const char* buf, int len);
     int SendOnOffPacket(bool onoff);
     int SendKeyFramePacket();
 
     bool GetData(int efd, Socket sock, int waitms);
 
 private:
-    int SendToControlSocket(const char* buf, int len);
-
     BYTE* MakeOnyPacketKeyFrame(int& size);
     BYTE* MakeOnyPacketOnOff(bool onoff, int& size);
 
