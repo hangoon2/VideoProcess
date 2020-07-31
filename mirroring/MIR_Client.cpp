@@ -161,7 +161,7 @@ void* ThreadFunc(void* pArg) {
             if( !pClient->GetData(epollfd, pClient->m_mirrorSocket, 10000) ) {
                 pClient->SetDoExitRunClientThread(true);
 
-                printf("MIRRORING SOCKET CLOSED\n");
+                printf("[VPS:%d] Mirroring socket is disconnected.\n", nHpNo);
                 break;
             }
         }
@@ -171,7 +171,7 @@ void* ThreadFunc(void* pArg) {
     }
 
     pClient->SetRunClientThreadReady(false);
-    printf("Mirroring service stopped\n");
+    printf("[VPS:%d] Mirroring service stopped\n", nHpNo);
 
     // Stop 처리에서 이미 보냄
 //    // send : mirror off
@@ -199,16 +199,9 @@ MIR_Client::MIR_Client() {
     m_mirrorSocket = INVALID_SOCKET;
     m_controlSocket = INVALID_SOCKET;
 
-    // m_nOffset = 0;
-    // m_nCurrReadSize = 0;
-    // m_nReadBufSize = 0;
-    // m_isHeadOfFrame = true;
-    // m_isFirstImage = true;
-
     m_pRcvBuf = NULL;
 
     m_pos = 0;
-    //m_iWrite = 0;
     m_rxStreamOrder = RX_PACKET_POS_START;
     m_dataSize = 0;
 }
@@ -333,7 +326,6 @@ int MIR_Client::SendOnOffPacket(bool onoff) {
         int size = 0;
         BYTE* ptrData = MakeOnyPacketOnOff(onoff, size);
         if(size != 0) {
-//            printf("[VPS:%d] Send OnOff Packet : %s\n", m_nHpNo, onoff ? "true" : "false");
             return SendToControlSocket((const char*)ptrData, size);
         }
     }
@@ -346,7 +338,6 @@ int MIR_Client::SendKeyFramePacket() {
         int size = 0;
         BYTE* ptrData = MakeOnyPacketKeyFrame(size);
         if(size != 0) {
-//            printf("[VPS:%d] Send Keyframe Packet\n", m_nHpNo);
             return SendToControlSocket((const char*)ptrData, size);
         }
     }
@@ -458,8 +449,6 @@ bool MIR_Client::GetData(int efd, Socket sock, int waitms) {
             int n = 0; 
 
             while( (n = ::read(sock, buf, sizeof buf)) > 0 ) {
-//                printf("[VPS:1] On Read Data : %d\n", n);
-
                 int idx = 0;
                 int iWrite = 0;
                 while(idx < n) {
@@ -521,63 +510,6 @@ bool MIR_Client::GetData(int efd, Socket sock, int waitms) {
                         }
                     }
                 }
-
-                // if(m_isHeadOfFrame) {
-                //     memcpy(m_pRcvBuf + m_nOffset, buf, n);
-                //     m_nCurrReadSize = n;
-                //     m_nOffset += m_nCurrReadSize;
-
-                //     if(m_nOffset >= CMD_HEAD_SIZE) {
-                //         int dataSize = ntohl( *((__int32_t*)(m_pRcvBuf + 1)) );
-
-                //         m_nReadBufSize = dataSize - (m_nOffset - CMD_HEAD_SIZE) + CMD_TAIL_SIZE;
-                //         m_isHeadOfFrame = false;
-                //     }
-                // } else {
-                //     memcpy(m_pRcvBuf + m_nOffset, buf, n);
-                //     m_nCurrReadSize = n;
-
-                //     m_nReadBufSize -= m_nCurrReadSize;        
-                //     m_nOffset += m_nCurrReadSize;
-
-                //     if(m_nReadBufSize == 0) {
-                //         m_nOffset = 0;
-
-                //         int iDataLen = ntohl( *(uint32_t*)&m_pRcvBuf[1] );
-                //         int iPacketLen = CMD_HEAD_SIZE + iDataLen + CMD_TAIL_SIZE;
-                        
-                //         if(iPacketLen > RECV_BUF_SIZE) {
-                //             printf("read() error: too many data\n");
-                //             return false;
-                //         }
-
-                //         if(m_pRcvBuf[iPacketLen - 1] != CMD_END_CODE) {
-                //             printf("read() error: invalid packet\n");
-                //             return false;
-                //         }
-
-                //         short usCmd = ntohs( *(short*)&m_pRcvBuf[5] );
-                //         if(usCmd == CMD_JPG_DEV_VERT_IMG_VERT ||
-                //             usCmd == CMD_JPG_DEV_HORI_IMG_HORI ||
-                //             usCmd == CMD_JPG_DEV_VERT_IMG_HORI ||
-                //             usCmd == CMD_JPG_DEV_HORI_IMG_VERT) {
-                //             ONYPACKET_UINT8 isKeyFrame = *&m_pRcvBuf[24];
-                //             if(m_isFirstImage && isKeyFrame) {
-                //                 m_isFirstImage = false;
-                //             }
-
-                //             if(m_pMirroringRoutine != NULL) {
-                //                 m_pMirroringRoutine((void*)m_pRcvBuf);
-                //             }
-                //         } else if(usCmd == CMD_MIRRORING_JPEG_CAPTURE_FAILED) {
-                //             if(m_pMirroringRoutine != NULL) {
-                //                 m_pMirroringRoutine((void*)m_pRcvBuf);
-                //             }
-                //         }
-
-                //         m_isHeadOfFrame = true;
-                //     }
-                // }
             }
 
             if( n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK) ) {

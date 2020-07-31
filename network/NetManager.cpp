@@ -15,13 +15,6 @@ void OnTimer(int id) {
     pNetMgr->UpdateState(id);
 }
 
-bool OnReadEx(ClientObject* pClient, char* pRcvData, int len) {
-    if(pNetMgr != NULL)
-        return pNetMgr->OnReadEx(pClient, pRcvData, len);
-
-    return false;
-}
-
 bool DoMirrorCallback(void* pMirroringPacket) {
     if(pNetMgr != NULL) {
         pNetMgr->BypassPacket(pMirroringPacket);
@@ -63,7 +56,11 @@ NetManager::~NetManager() {
 void NetManager::OnServerModeStart() {
     GetPrivateProfileString(VPS_SZ_SECTION_CAPTURE, VPS_SZ_KEY_AVI_PATH, "", m_strAviSavePath);
 
-    int server = m_VPSSvr.InitSocket(10001, ::OnReadEx);
+    char value[16] = {0,};
+    GetPrivateProfileString(VPS_SZ_SECTION_STREAM, VPS_SZ_KEY_SERVER_PORT, "10001", value);
+    int port = atoi(value);
+
+    int server = m_VPSSvr.InitSocket(this, port);
     if(server <= 0) {
         printf("Media Server Socket 생성 실패\n");
     }
@@ -127,7 +124,7 @@ bool NetManager::BypassPacket(void* pMirroringPacket) {
 }
 
 void NetManager::OnMirrorStopped(int nHpNo, int nStopCode) {
-    printf("MIRRORING THREAD[%d] STOPPED : %d\n", nHpNo, nStopCode);
+    printf("[VPS:%d] OnMirrorStopped : %d\n", nHpNo, nStopCode);
 
     if( IsOnService(nHpNo) ) {
         // 아직 서비스 중인 상태에서 소켓이 닫힌 경우 DC에게 알린다.
@@ -207,6 +204,11 @@ void NetManager::ClientConnected(ClientObject* pClient) {
 
     const char* strClientType = pClient->GetClientTypeString();
     printf("[VPS:%d] %s is connected.\n", pClient->m_nHpNo, strClientType);
+}
+
+void NetManager::ClientDisconnected(ClientObject* pClient) {
+    const char* strClientType = pClient->GetClientTypeString();
+    printf("[VPS:%d] %s is disconnected.\n", pClient->m_nHpNo, strClientType);
 }
 
 bool NetManager::SendToMobileController(BYTE* pData, int iLen, bool force) {

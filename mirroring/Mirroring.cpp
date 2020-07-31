@@ -6,6 +6,9 @@
 
 static Mirroring* gs_pMirroring = NULL;
 
+static int MIRROR_PORT = 8800;
+static int CONTROL_PORT = 8820;
+
 bool MirroringCallback(void* pMirroringPacket) {
     BYTE* pPacket = (BYTE*)pMirroringPacket;
 
@@ -42,6 +45,13 @@ Mirroring::Mirroring() {
         m_nKeyFrameH[i] = 0;
     }
 
+    char value[16] = {0,};
+    GetPrivateProfileString(VPS_SZ_SECTION_STREAM, VPS_SZ_KEY_MIRROR_PORT, "", value);
+    MIRROR_PORT = atoi(value);
+
+    GetPrivateProfileString(VPS_SZ_SECTION_STREAM, VPS_SZ_KEY_CONTROL_PORT, "", value);
+    CONTROL_PORT = atoi(value);
+
     gs_pMirroring = this;
 }
 
@@ -53,8 +63,8 @@ bool Mirroring::StartMirroring(int nHpNo,
             PMIRRORING_ROUTINE pMirroringRoutine, 
             PMIRRORING_STOP_ROUTINE pMirroringStopRoutine) {
     bool ret = false;
-    int nMirrorPort = 8800 + nHpNo;
-    int nControlPort = 8820 + nHpNo;
+    int nMirrorPort = MIRROR_PORT + nHpNo;
+    int nControlPort = CONTROL_PORT + nHpNo;
 
     if(m_pMirroringStopRoutine[nHpNo - 1] == NULL) {
         // 쓰래드 시작

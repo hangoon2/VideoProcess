@@ -35,7 +35,11 @@ typedef long long       ONYPACKET_INT64;
 #define VPS_SZ_JPG_CREATION_FAIL    "JPG_CREATION_FAIL"
 #define VPS_SZ_MP4_CREATION_FAIL    "MP4_CREATION_FAIL"
 
+#define VPS_SZ_SECTION_STREAM       "[Stream]"
 #define VPS_SZ_SECTION_CAPTURE      "[CaptureImage]"            
+#define VPS_SZ_KEY_SERVER_PORT      "TCPPort"
+#define VPS_SZ_KEY_MIRROR_PORT      "MirrorPort"
+#define VPS_SZ_KEY_CONTROL_PORT     "ControlPort"
 #define VPS_SZ_KEY_AVI_PATH         "AVISavePath"
 
 #define VPS_SZ_MOBILE_CONTROLLER    "Device Controller"

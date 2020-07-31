@@ -1,4 +1,5 @@
 #include "AsyncMediaServerSocket.h"
+#include "NetManager.h"
 
 #include <sys/socket.h>
 #include <sys/event.h>
@@ -17,7 +18,7 @@ const int kReadEvent = 1;
 const int kWriteEvent = 2;
 
 AsyncMediaServerSocket::AsyncMediaServerSocket() {
-    m_pOnReadEx = NULL;
+    m_pNetMgr = NULL;
 }
 
 AsyncMediaServerSocket::~AsyncMediaServerSocket() {
@@ -85,8 +86,8 @@ void AsyncMediaServerSocket::OnRead(int efd, Socket sock) {
     int n = 0; 
 
     while( (n = ::read(sock, buf, sizeof buf)) > 0 ) {
-        if(m_pOnReadEx != NULL) {
-            m_pOnReadEx( m_clientList.Find(sock), buf, n );
+        if(m_pNetMgr != NULL) {
+            ((NetManager*)m_pNetMgr)->OnReadEx( m_clientList.Find(sock), buf, n );
         }
     }
 
@@ -94,14 +95,14 @@ void AsyncMediaServerSocket::OnRead(int efd, Socket sock) {
         return;
     }
 
-//    exit_if(n < 0, "read error");
-    
     OnClose(sock);
 }
 
 bool AsyncMediaServerSocket::OnClose(Socket sock) {
     ClientObject* pClient = m_clientList.Find(sock);
     if(pClient != NULL && pClient->m_clientSock != INVALID_SOCKET) {
+        ((NetManager*)m_pNetMgr)->ClientDisconnected(pClient);
+
         m_clientList.Delete(sock);
 
         delete pClient;
@@ -149,8 +150,8 @@ void AsyncMediaServerSocket::OnServerEvent(int efd, ServerSocket serverSock, int
     }
 }
 
-int AsyncMediaServerSocket::InitSocket(int port, PDATA_READ_ROUTINE pOnReadEx) {
-    m_pOnReadEx = pOnReadEx;
+int AsyncMediaServerSocket::InitSocket(void* pNetMgr, int port) {
+    m_pNetMgr = pNetMgr;
 
     int epollfd = kqueue();
     exit_if(epollfd < 0, "epoll_create failed");

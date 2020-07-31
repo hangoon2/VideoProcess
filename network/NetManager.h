@@ -21,8 +21,10 @@ public:
 
     void UpdateState(int id);
 
-private:
     void ClientConnected(ClientObject* pClient);
+    void ClientDisconnected(ClientObject* pClient);
+
+private:
     bool SendToMobileController(BYTE* pData, int iLen, bool force = false);
     bool SendToClient(short usCmd, int nHpNo, BYTE* pData, int iLen, int iKeyFrameNo);
     bool Send(BYTE* pData, int iLen, ClientObject* pClient, bool force);
