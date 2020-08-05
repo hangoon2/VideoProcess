@@ -6,6 +6,9 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <fstream>
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
 
 using namespace std;
 
@@ -110,6 +113,12 @@ void GetLocalTime(SYSTEM_TIME &stTime) {
     stTime.millisecond = time.tv_usec / 1000;
 }
 
+unsigned long GetTickCount() {
+    timeval tv;
+    gettimeofday(&tv, NULL);
+    return (unsigned long)(tv.tv_sec * 1000 + tv.tv_usec / 1000);
+}
+
 bool DoesFileExist(const char* filePath) {
     return access(filePath, 0) == 0;
 }
@@ -142,4 +151,14 @@ void GetPrivateProfileString(const char* section, const char* key, const char* d
     }
 
     file.close();
+}
+
+void* Shared_GetPointer() {
+    int sharedId = shmget((key_t)SAHRED_MEMORY_KEY, sizeof(HDCAP) * MEM_SHARED_MAX_COUNT, 0666);
+    if(sharedId < 0) {
+        printf("Shared Memory : Failed Get Pointer\n");
+        return NULL;
+    }
+
+    return shmat(sharedId, NULL, 0); 
 }

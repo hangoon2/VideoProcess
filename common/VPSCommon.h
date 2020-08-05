@@ -6,6 +6,8 @@
 #define MAXCHCNT            10
 #define MAXCLIENT_PER_CH    21  // Host(1) + Guest(20) = 21
 
+#define ENABLE_SHARED_MEMORY    1
+
 #define INVALID_SOCKET 0L
 
 #define CMD_START_CODE  0x7F
@@ -28,6 +30,8 @@ typedef long long       ONYPACKET_INT64;
 #define TIMERID_10SEC               10 * 1000
 
 #define VPS_DEFAULT_JPG_QUALITY     70
+
+#define FULLHD_IMAGE_SIZE (1382400)     //(960 * 960 * 4)
 
 #define MOBILE_CONTROLL_ID          "MOBILECONTROL"
 
@@ -112,9 +116,22 @@ typedef long long       ONYPACKET_INT64;
 
 #define CMD_MIRRORING_CAPTURE_FAILED    32401
 
-/*//////////////////////////////////////////////
-//               Common Function              //
-//////////////////////////////////////////////*/
+#define SAHRED_MEMORY_KEY               6769
+#define MEM_SHARED_MAX_COUNT            (4 * MAXCHCNT)
+
+typedef enum {
+    TYPE_ACCESS_EMPTY = 0,
+    TYPE_ACCESS_DATA,
+    TYPE_ACCESS_WRITTING,
+    TYPE_ACESS_READING
+} ACCESS_MODE_TYPE;
+
+typedef struct TAG_HDCAP {
+    int nHpNo;
+    int accessMode;     
+    int msec;
+    BYTE btImg[FULLHD_IMAGE_SIZE];
+} HDCAP;
 
 struct SYSTEM_TIME {
     int year;
@@ -126,6 +143,10 @@ struct SYSTEM_TIME {
     int millisecond;
 };
 
+/*//////////////////////////////////////////////
+//               Common Function              //
+//////////////////////////////////////////////*/
+
 ONYPACKET_UINT16 CalChecksum(unsigned short* ptr, int nbytes);
 uint16_t SwapEndianU2(uint16_t wValue);
 uint32_t SwapEndianU4(uint32_t nValue);
@@ -133,9 +154,12 @@ uint32_t SwapEndianU4(uint32_t nValue);
 BYTE* MakeSendData2(short usCmd, int nHpNo, int dataLen, BYTE* pData, BYTE* pDstData, int& totLen);
 
 void GetLocalTime(SYSTEM_TIME &stTime);
+unsigned long GetTickCount();
 
 bool DoesFileExist(const char* filePath);
 
 void GetPrivateProfileString(const char* section, const char* key, const char* defaultValue, char* value);
+
+void* Shared_GetPointer();
 
 #endif

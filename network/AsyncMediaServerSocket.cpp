@@ -18,11 +18,19 @@ const int kReadEvent = 1;
 const int kWriteEvent = 2;
 
 AsyncMediaServerSocket::AsyncMediaServerSocket() {
+    m_serverSock = INVALID_SOCKET;
+
     m_pNetMgr = NULL;
 }
 
 AsyncMediaServerSocket::~AsyncMediaServerSocket() {
     m_clientList.Clear();
+
+    if(m_serverSock != INVALID_SOCKET) {
+        printf("[VPS:0] Closed Listening Server\n");
+        close(m_serverSock);
+        m_serverSock = INVALID_SOCKET;
+    }
 }
 
 void AsyncMediaServerSocket::SetNonBlock(Socket sock) {
@@ -156,8 +164,8 @@ int AsyncMediaServerSocket::InitSocket(void* pNetMgr, int port) {
     int epollfd = kqueue();
     exit_if(epollfd < 0, "epoll_create failed");
 
-    int listenfd = socket(AF_INET, SOCK_STREAM, 0);
-    exit_if(listenfd < 0, "socket failed");
+    m_serverSock = socket(AF_INET, SOCK_STREAM, 0);
+    exit_if(m_serverSock < 0, "socket failed");
 
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof addr);
@@ -165,19 +173,19 @@ int AsyncMediaServerSocket::InitSocket(void* pNetMgr, int port) {
     addr.sin_port = htons(port);
     addr.sin_addr.s_addr = INADDR_ANY;
 
-    int r = ::bind(listenfd, (struct sockaddr *)&addr, sizeof(struct sockaddr));
+    int r = ::bind(m_serverSock, (struct sockaddr *)&addr, sizeof(struct sockaddr));
     exit_if(r, "bind to 0.0.0.0:%d failed %d %s", port, errno, strerror(errno));
 
-    r = listen(listenfd, 20);
+    r = listen(m_serverSock, 20);
     exit_if(r, "listen failed %d %s", errno, strerror(errno));
 
     printf("[VPS:0] VPS Server listening at %d\n", port);
 
-    SetNonBlock(listenfd);
-    UpdateEvents(epollfd, listenfd, kReadEvent, false);
+    SetNonBlock(m_serverSock);
+    UpdateEvents(epollfd, m_serverSock, kReadEvent, false);
 
     for(;;) {
-        OnServerEvent(epollfd, listenfd, 10000);
+        OnServerEvent(epollfd, m_serverSock, 10000);
     }
 
     return 0;

@@ -30,6 +30,8 @@ private:
     bool Send(BYTE* pData, int iLen, ClientObject* pClient, bool force);
 
     bool JPGCaptureAndSend(int nHpNo, BYTE* pJpgData, int iJpgDataLen);
+    void Record(int nHpNo, bool start);
+    bool DoMirrorVideoRecording(int nHpNo, short usCmd, bool isKeyFrame, BYTE* pPacket, int iDataLen);
 
     bool CloseClient(ClientObject* pClient);
     bool WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, int len);
@@ -42,7 +44,9 @@ private:
     char m_strAviSavePath[256];
 
     bool m_isOnService[MAXCHCNT];
+
     bool m_isJpgCapture[MAXCHCNT];
+    bool m_isRunRecord[MAXCHCNT];
 
     int m_nRecordStartCommandCountReceived[MAXCHCNT];
     int m_nRecordStopCommandCountReceived[MAXCHCNT];

@@ -29,6 +29,7 @@ private:
     void OnServerEvent(int efd, ServerSocket serverSock, int waitms);
 
 private:
+    ServerSocket m_serverSock;
     ClientList m_clientList;
 
     void* m_pNetMgr;

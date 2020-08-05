@@ -1,13 +1,27 @@
 #include "NetManager.h"
 #include "../common/VPSCommon.h"
 #include "../mirroring/VPSJpeg.h"
+#include "../recorder/VideoRecorder.h"
 
 #include <stdio.h>
 #include <unistd.h>
+#include <opencv2/opencv.hpp>
+
+using namespace cv;
 
 static NetManager *pNetMgr = NULL;
 
+static VideoWriter gs_writer[MAXCHCNT];
+static bool is_RectReady[MAXCHCNT];
+static Mat gs_lastScene[MAXCHCNT];
+static int gs_nLogerKeyFrameLength[MAXCHCNT];
+static int gs_nShorterKeyFrameLength[MAXCHCNT];
+
+static VideoRecorder* gs_recorder[MAXCHCNT];
+
 static BYTE gs_pBufSendDataToClient[MAXCHCNT + 1][SEND_BUF_SIZE] = {0,};
+
+static void* gs_sharedMem = NULL;
 
 void OnTimer(int id) {
     if(pNetMgr == NULL) return;
@@ -30,6 +44,10 @@ void DoMirrorStoppedCallback(int nHpNo, int nStopCode) {
 }
 
 NetManager::NetManager() {
+#if ENABLE_SHARED_MEMORY
+    gs_sharedMem = Shared_GetPointer();
+#endif
+
     for(int i = 0; i < MAXCHCNT; i++) {
         m_isOnService[i] = false;
         
@@ -38,6 +56,17 @@ NetManager::NetManager() {
         m_nCaptureCommandReceivedCount[i] = 0;
 
         m_iRefreshCH[i] = 1;
+
+        m_isJpgCapture[i] = false;
+        m_isRunRecord[i] = false;
+
+        is_RectReady[i] = false;
+        
+        gs_nLogerKeyFrameLength[i] = 0;
+        gs_nShorterKeyFrameLength[i] = 0;
+
+        gs_recorder[i] = new VideoRecorder(gs_sharedMem);
+        gs_lastScene[i].create(960, 960, CV_8UC3);
     }
 
     memset(m_strAviSavePath, 0x00, sizeof(m_strAviSavePath));
@@ -51,6 +80,11 @@ NetManager::NetManager() {
 NetManager::~NetManager() {
     m_timer_1.Stop();
     m_timer_10.Stop();
+
+    for(int i = 0; i < MAXCHCNT; i++) {
+        delete gs_recorder[i];
+        gs_recorder[i] = NULL;
+    }
 }
 
 void NetManager::OnServerModeStart() {
@@ -117,7 +151,9 @@ bool NetManager::BypassPacket(void* pMirroringPacket) {
             }
 
             return JPGCaptureAndSend(nHpNo, pJpgData, nJpgDataSize);
-        }
+        } 
+
+        DoMirrorVideoRecording(nHpNo, usCmd, isKeyFrame, pPacket, iDataLen);
     }
 
     return true;
@@ -306,6 +342,141 @@ bool NetManager::JPGCaptureAndSend(int nHpNo, BYTE* pJpgData, int iJpgDataLen) {
     }
 
     return false;
+}
+
+void NetManager::Record(int nHpNo, bool start) {
+    if(start) {
+        char filePath[512] = {0,};
+        char fileName[DEFAULT_STRING_SIZE] = {0,};
+
+        SYSTEM_TIME stTime;
+        GetLocalTime(stTime);
+
+        sprintf(fileName, "%02d_%04d%02d%02d_%02d%02d%02d%03d.mp4",
+                nHpNo, 
+                stTime.year, stTime.month, stTime.day,
+                stTime.hour, stTime.minute, stTime.second, stTime.millisecond);
+
+        sprintf(filePath, "%s/%d/%s", m_strAviSavePath, nHpNo, fileName);
+
+        is_RectReady[nHpNo - 1] = false;
+
+        // int codec = VideoWriter::fourcc('f', 'l', 'v', '1');
+        // double fps = 20.0;
+        // Size sizeFrame(960, 960);
+        // gs_writer[nHpNo - 1].open(filePath, codec, fps, sizeFrame, true);
+
+        gs_recorder[nHpNo - 1]->StartRecord(nHpNo, filePath);
+
+        m_isRunRecord[nHpNo - 1] = start;
+
+        m_mirror.SendKeyFrame(nHpNo);
+
+        m_nRecordStartCommandCountReceived[nHpNo - 1]++;
+    } else {
+        m_isRunRecord[nHpNo - 1] = start;
+
+        // gs_writer[nHpNo - 1].release();
+        
+        gs_recorder[nHpNo - 1]->StopRecord();
+
+        m_nRecordStopCommandCountReceived[nHpNo - 1]++;
+    }
+}
+
+bool NetManager::DoMirrorVideoRecording(int nHpNo, short usCmd, bool isKeyFrame, BYTE* pPacket, int iDataLen) {
+    BYTE* pJpgSrc = pPacket + 25;
+    int nJpgSrcLen = iDataLen - 17;
+    
+    short nLeft = ntohs( *(short*)&pPacket[16] );
+    short nTop = ntohs( *(short*)&pPacket[18] );
+    short nRight = ntohs( *(short*)&pPacket[20] );
+    short nBottom = ntohs( *(short*)&pPacket[22] );
+
+    if(isKeyFrame) {
+        if(m_isRunRecord[nHpNo - 1] && !is_RectReady[nHpNo - 1]) {
+            is_RectReady[nHpNo - 1] = true;
+        }
+
+        gs_nLogerKeyFrameLength[nHpNo - 1] = nRight > nBottom ? nRight : nBottom;
+        gs_nShorterKeyFrameLength[nHpNo - 1] = nRight < nBottom ? nRight : nBottom;
+
+        memset( gs_lastScene[nHpNo - 1].data, 0x00, gs_lastScene[nHpNo - 1].total() * gs_lastScene[nHpNo - 1].elemSize() );
+    }
+
+    Rect rect;
+
+    if(usCmd == CMD_JPG_DEV_VERT_IMG_HORI) {
+        VPSJpeg vpsJpeg;
+        int nNewJpgDataSize = vpsJpeg.RotateLeft(pJpgSrc, nJpgSrcLen, 90);
+        if(nNewJpgDataSize > 0) {
+            nJpgSrcLen = nNewJpgDataSize;
+            usCmd = CMD_JPG_DEV_HORI_IMG_HORI;
+
+            short nTempLeft = nLeft;
+            nLeft = nTop;
+            nTop = gs_nShorterKeyFrameLength[nHpNo - 1] - nRight;
+            nRight = nBottom;
+            nBottom = gs_nShorterKeyFrameLength[nHpNo - 1] - nTempLeft;
+        }
+    } else if(usCmd == CMD_JPG_DEV_HORI_IMG_VERT) {
+        VPSJpeg vpsJpeg;
+        int nNewJpgDataSize = vpsJpeg.RotateRight(pJpgSrc, nJpgSrcLen, 90);
+        if(nNewJpgDataSize > 0) {
+            nJpgSrcLen = nNewJpgDataSize;
+            usCmd = CMD_JPG_DEV_VERT_IMG_VERT;
+
+            short nTempLeft = nLeft;
+            short nTempTop = nTop;
+            short nTempRight = nRight;
+            nLeft = gs_nShorterKeyFrameLength[nHpNo - 1] - nBottom;
+            nTop = nTempLeft;
+            nRight = gs_nShorterKeyFrameLength[nHpNo - 1] - nTempTop;
+            nBottom = nTempRight;
+        }
+    }
+
+    Mat rawData = Mat(1, nJpgSrcLen, CV_8SC1, (void*)pJpgSrc).clone();
+    Mat rawImage = imdecode(rawData, IMREAD_COLOR);
+
+    int startPt = (gs_nLogerKeyFrameLength[nHpNo - 1] - gs_nShorterKeyFrameLength[nHpNo - 1]) / 2;
+
+    if(isKeyFrame) {
+        if(usCmd == CMD_JPG_DEV_VERT_IMG_VERT) {
+            rect.x = startPt;
+            rect.y = 0;
+            rect.width = nRight - nLeft;
+            rect.height = nBottom - nTop;
+        } else if(usCmd == CMD_JPG_DEV_HORI_IMG_HORI) {
+            rect.x = 0;
+            rect.y = startPt;
+            rect.width = nRight - nLeft;
+            rect.height = nBottom - nTop;
+        }
+    } else {
+        if(usCmd == CMD_JPG_DEV_VERT_IMG_VERT) {
+            rect.x = startPt + nLeft;
+            rect.y = nTop;
+            rect.width = nRight - nLeft;
+            rect.height = nBottom - nTop;
+        } else if(usCmd == CMD_JPG_DEV_HORI_IMG_HORI) {
+            rect.x = nLeft;
+            rect.y = startPt + nTop;
+            rect.width = nRight - nLeft;
+            rect.height = nBottom - nTop;
+        }
+    }
+
+    Mat imageROI(gs_lastScene[nHpNo - 1], rect);
+    rawImage.copyTo(imageROI);
+
+    if(!isKeyFrame && !is_RectReady[nHpNo - 1]) {
+        return false;
+    }
+
+    gs_recorder[nHpNo - 1]->EnQueue(gs_lastScene[nHpNo - 1].data);
+
+    return true;
 }
 
 bool NetManager::CloseClient(ClientObject* pClient) {
@@ -502,6 +673,7 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
         case CMD_VERTICAL: {
             m_mirror.SendKeyFrame(nHpNo);
 
+            m_iRefreshCH[nHpNo - 1] = 1;    // 전체 영상 전송
             m_mirror.SetDeviceOrientation(nHpNo, 1);
         }
         break;
@@ -509,6 +681,7 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
         case CMD_HORIZONTAL: {
             m_mirror.SendKeyFrame(nHpNo);
 
+            m_iRefreshCH[nHpNo - 1] = 1;    // 전체 영상 전송
             m_mirror.SetDeviceOrientation(nHpNo, 0);
         }
         break;
@@ -519,14 +692,7 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
             printf("[VPS:%d] [Record] 단말기 녹화 %s 명령 받음\n", nHpNo, start ? "시작" : "정지");
 
             // 녹화 명령 처리
-
-            if(start) {
-                m_mirror.SendKeyFrame(nHpNo);
-
-                m_nRecordStartCommandCountReceived[nHpNo - 1]++;
-            } else {
-                m_nRecordStopCommandCountReceived[nHpNo - 1]++;
-            }
+            Record(nHpNo, start);
         }
         break;
 
