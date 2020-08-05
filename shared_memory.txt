@@ -1,0 +1,20 @@
+공유메모리 설정
+
+공유 메모리 확인
+=> ipcs
+
+공유 메모리 설정 확인
+=> ipcs -Msh
+
+공유 메모리 삭제
+=> ipcrm -m ‘ID'
+
+공유 메모리 최대 크기를 2GB로 설정
+kern.sysv.shmmax=2147483648
+
+=> sudo sysctl -w kern.sysv.shmmax=2147483648
+
+Shmall 값을 변경(shmmax / 4096으로 설정)
+Kern.sysv.shmall=1024
+
+=> sudo sysctl -w kern.sysv.shmall=524288
