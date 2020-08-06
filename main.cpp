@@ -57,7 +57,7 @@ int main() {
 	pCap = (HDCAP*)shared_memory;
 
     for(int i = 0 ;i < MEM_SHARED_MAX_COUNT; i++){
-        memset(&pCap[i], 0x00, sizeof(HDCAP));
+        memset( &pCap[i], 0x00, sizeof(HDCAP) );
     }
 #endif
 

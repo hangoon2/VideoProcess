@@ -20,18 +20,22 @@
 typedef int Socket;
 typedef int ServerSocket;
 
-typedef unsigned char   BYTE;
-typedef unsigned short  ONYPACKET_UINT16;
-typedef int             ONYPACKET_INT;
-typedef long            ONYPACKET_INT32;
-typedef long long       ONYPACKET_INT64;
+typedef unsigned char       BYTE;
+typedef unsigned short      UINT16;
+typedef unsigned int        UINT;
+typedef unsigned long long  ULONGLONG;
+typedef int                 INT;
+typedef long                INT64;
 
 #define TIMERID_JPGFPS_1SEC         1000
 #define TIMERID_10SEC               10 * 1000
+#define TIMERID_20SEC               20 * 1000
 
 #define VPS_DEFAULT_JPG_QUALITY     70
 
-#define FULLHD_IMAGE_SIZE (1382400)     //(960 * 960 * 4)
+#define FULLHD_IMAGE_SIZE           1382400     //(960 * 960 * 4)
+
+#define VPS_CAPTURE_RESPONSE_WAITING_TIME   3000
 
 #define MOBILE_CONTROLL_ID          "MOBILECONTROL"
 
@@ -111,8 +115,12 @@ typedef long long       ONYPACKET_INT64;
 
 #define CMD_GUEST_UPDATED               31001
 
+// vps가 살아있는 상태임을 알리는 메시지(VPS -> DC)
+#define CMD_MONITOR_VPS_HEARTBEAT       32000
 // 디바이스가 연결된 상태임을 알리는 메시지(VD -> VPS)
 #define CMD_MONITOR_VD_HEARTBEAT        32100
+
+#define CMD_DUPLICATED_CLIENT           32201
 
 #define CMD_MIRRORING_CAPTURE_FAILED    32401
 
@@ -129,7 +137,8 @@ typedef enum {
 typedef struct TAG_HDCAP {
     int nHpNo;
     int accessMode;     
-    int msec;
+    ULONGLONG msec;
+    ULONGLONG ui64ID;
     BYTE btImg[FULLHD_IMAGE_SIZE];
 } HDCAP;
 
@@ -147,14 +156,14 @@ struct SYSTEM_TIME {
 //               Common Function              //
 //////////////////////////////////////////////*/
 
-ONYPACKET_UINT16 CalChecksum(unsigned short* ptr, int nbytes);
-uint16_t SwapEndianU2(uint16_t wValue);
-uint32_t SwapEndianU4(uint32_t nValue);
+UINT16 CalChecksum(UINT16* ptr, int nbytes);
+UINT16 SwapEndianU2(UINT16 wValue);
+uint32_t SwapEndianU4(UINT nValue);
 
 BYTE* MakeSendData2(short usCmd, int nHpNo, int dataLen, BYTE* pData, BYTE* pDstData, int& totLen);
 
 void GetLocalTime(SYSTEM_TIME &stTime);
-unsigned long GetTickCount();
+ULONGLONG GetTickCount();
 
 bool DoesFileExist(const char* filePath);
 

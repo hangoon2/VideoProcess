@@ -356,12 +356,12 @@ BYTE* MIR_Client::MakeOnyPacketKeyFrame(int& size) {
     memcpy(m_sendBuf, (char*)&mStartFlag, sizeofData);
     dataSum = sizeofData;
 
-    ONYPACKET_INT mDataSize = htonl(0);
+    INT mDataSize = htonl(0);
     sizeofData = sizeof(mDataSize);
     memcpy(m_sendBuf + dataSum, (char*)&mDataSize, sizeofData);
     dataSum += sizeofData;
 
-    ONYPACKET_UINT16 mCommandCode = htons(CMD_KEY_FRAME);
+    UINT16 mCommandCode = htons(CMD_KEY_FRAME);
     sizeofData = sizeof(mCommandCode);
     memcpy(m_sendBuf + dataSum, (char*)&mCommandCode, sizeofData);
     dataSum += sizeofData;
@@ -371,7 +371,7 @@ BYTE* MIR_Client::MakeOnyPacketKeyFrame(int& size) {
     memcpy(m_sendBuf + dataSum, (char*)&mDeviceNo, sizeofData);
     dataSum += sizeofData;
 
-    ONYPACKET_UINT16 mChecksum = htons( CalChecksum((ONYPACKET_UINT16*)(m_sendBuf + 1), ntohl(mDataSize) + CMD_HEAD_SIZE - 1) );
+    UINT16 mChecksum = htons( CalChecksum((UINT16*)(m_sendBuf + 1), ntohl(mDataSize) + CMD_HEAD_SIZE - 1) );
     sizeofData = sizeof(mChecksum);
     memcpy(m_sendBuf + dataSum, (char*)&mChecksum, sizeofData);
     dataSum += sizeofData;
@@ -397,12 +397,12 @@ BYTE* MIR_Client::MakeOnyPacketOnOff(bool onoff, int& size) {
     memcpy(m_sendBuf, (char*)&mStartFlag, sizeofData);
     dataSum = sizeofData;
 
-    ONYPACKET_INT mDataSize = htonl(1);
+    INT mDataSize = htonl(1);
     sizeofData = sizeof(mDataSize);
     memcpy(m_sendBuf + dataSum, (char*)&mDataSize, sizeofData);
     dataSum += sizeofData;
 
-    ONYPACKET_UINT16 mCommandCode = htons(CMD_ON_OFF);
+    UINT16 mCommandCode = htons(CMD_ON_OFF);
     sizeofData = sizeof(mCommandCode);
     memcpy(m_sendBuf + dataSum, (char*)&mCommandCode, sizeofData);
     dataSum += sizeofData;
@@ -417,7 +417,7 @@ BYTE* MIR_Client::MakeOnyPacketOnOff(bool onoff, int& size) {
     memcpy(m_sendBuf + dataSum, (char*)&mOnOff, sizeofData);
     dataSum += sizeofData;
 
-    ONYPACKET_UINT16 mChecksum = htons( CalChecksum((ONYPACKET_UINT16*)(m_sendBuf + 1), ntohl(mDataSize) + CMD_HEAD_SIZE - 1) );
+    UINT16 mChecksum = htons( CalChecksum((UINT16*)(m_sendBuf + 1), ntohl(mDataSize) + CMD_HEAD_SIZE - 1) );
     sizeofData = sizeof(mChecksum);
     memcpy(m_sendBuf + dataSum, (char*)&mChecksum, sizeofData);
     dataSum += sizeofData;

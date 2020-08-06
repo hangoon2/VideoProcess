@@ -11,13 +11,14 @@ using namespace cv;
 
 static NetManager *pNetMgr = NULL;
 
-static VideoWriter gs_writer[MAXCHCNT];
 static bool is_RectReady[MAXCHCNT];
 static Mat gs_lastScene[MAXCHCNT];
 static int gs_nLogerKeyFrameLength[MAXCHCNT];
 static int gs_nShorterKeyFrameLength[MAXCHCNT];
 
 static VideoRecorder* gs_recorder[MAXCHCNT];
+
+static char gs_recordFileName[MAXCHCNT][DEFAULT_STRING_SIZE] = {0,};
 
 static BYTE gs_pBufSendDataToClient[MAXCHCNT + 1][SEND_BUF_SIZE] = {0,};
 
@@ -44,6 +45,10 @@ void DoMirrorStoppedCallback(int nHpNo, int nStopCode) {
 }
 
 NetManager::NetManager() {
+    char value[16] = {0,};
+    GetPrivateProfileString(VPS_SZ_SECTION_STREAM, VPS_SZ_KEY_SERVER_PORT, "10001", value);
+    m_serverPort = atoi(value);
+
 #if ENABLE_SHARED_MEMORY
     gs_sharedMem = Shared_GetPointer();
 #endif
@@ -55,17 +60,27 @@ NetManager::NetManager() {
         m_nRecordStopCommandCountReceived[i] = 0;
         m_nCaptureCommandReceivedCount[i] = 0;
 
+        m_iCaptureCount[i] = 0;
+        m_iCaptureCountOld[i] = 0;
+        m_iCompressedCount[i] = 0;
+        m_iCompressedCountOld[i] = 0;
+        m_iSendCount[i] = 0;
+        m_iSendCountOld[i] = 0;
+
         m_iRefreshCH[i] = 1;
 
         m_isJpgCapture[i] = false;
+        m_nJpgCaptureStartTime[i] = 0;
+
         m_isRunRecord[i] = false;
+        m_nRecStartTime[i] = 0;
 
         is_RectReady[i] = false;
         
         gs_nLogerKeyFrameLength[i] = 0;
         gs_nShorterKeyFrameLength[i] = 0;
 
-        gs_recorder[i] = new VideoRecorder(gs_sharedMem);
+        gs_recorder[i] = new VideoRecorder(gs_sharedMem, i + 1, m_serverPort);
         gs_lastScene[i].create(960, 960, CV_8UC3);
     }
 
@@ -75,11 +90,13 @@ NetManager::NetManager() {
 
     m_timer_1.Start(TIMERID_JPGFPS_1SEC, OnTimer);
     m_timer_1.Start(TIMERID_10SEC, OnTimer);
+    m_timer_20.Start(TIMERID_20SEC, OnTimer);
 }
 
 NetManager::~NetManager() {
     m_timer_1.Stop();
     m_timer_10.Stop();
+    m_timer_20.Stop();
 
     for(int i = 0; i < MAXCHCNT; i++) {
         delete gs_recorder[i];
@@ -90,11 +107,7 @@ NetManager::~NetManager() {
 void NetManager::OnServerModeStart() {
     GetPrivateProfileString(VPS_SZ_SECTION_CAPTURE, VPS_SZ_KEY_AVI_PATH, "", m_strAviSavePath);
 
-    char value[16] = {0,};
-    GetPrivateProfileString(VPS_SZ_SECTION_STREAM, VPS_SZ_KEY_SERVER_PORT, "10001", value);
-    int port = atoi(value);
-
-    int server = m_VPSSvr.InitSocket(this, port);
+    int server = m_VPSSvr.InitSocket(this, m_serverPort);
     if(server <= 0) {
         printf("Media Server Socket 생성 실패\n");
     }
@@ -107,6 +120,9 @@ bool NetManager::BypassPacket(void* pMirroringPacket) {
     short usCmd = ntohs( *(short*)&pPacket[5] );
     int nHpNo = *(&pPacket[7]);
     bool isKeyFrame = *&pPacket[24] == 1 ? true : false;
+
+    // capture count 업데이트
+    m_iCaptureCount[nHpNo - 1]++;
 
     if(usCmd == CMD_MIRRORING_CAPTURE_FAILED) {
         return SendToClient(usCmd, nHpNo, pPacket, CMD_HEAD_SIZE + iDataLen + CMD_TAIL_SIZE, 0);
@@ -125,33 +141,11 @@ bool NetManager::BypassPacket(void* pMirroringPacket) {
 
         if( SendToClient(usCmd, nHpNo, pPacket, CMD_HEAD_SIZE + iDataLen + CMD_TAIL_SIZE, iKeyFrameNo) ) {
             // 전송 count 업데이트
+            m_iSendCount[nHpNo - 1]++;
         } else {
             // 전송 실패 시 키프레임을 요청한다.
             m_mirror.SendKeyFrame(nHpNo); 
         }
-
-        if(m_isJpgCapture[nHpNo - 1] && isKeyFrame) {
-            m_isJpgCapture[nHpNo - 1] = false;
-
-            BYTE* pJpgData = pPacket + 25;
-            int nJpgDataSize = iDataLen - 17;
-
-            if(usCmd == CMD_JPG_DEV_VERT_IMG_HORI) {
-                VPSJpeg vpsJpeg;
-                int nNewJpgDataSize = vpsJpeg.RotateLeft(pJpgData, nJpgDataSize, 90);
-                if(nNewJpgDataSize > 0) {
-                    nJpgDataSize = nNewJpgDataSize;
-                }
-            } else if(usCmd == CMD_JPG_DEV_HORI_IMG_VERT) {
-                VPSJpeg vpsJpeg;
-                int nNewJpgDataSize = vpsJpeg.RotateRight(pJpgData, nJpgDataSize, 90);
-                if(nNewJpgDataSize > 0) {
-                    nJpgDataSize = nNewJpgDataSize;
-                }
-            }
-
-            return JPGCaptureAndSend(nHpNo, pJpgData, nJpgDataSize);
-        } 
 
         DoMirrorVideoRecording(nHpNo, usCmd, isKeyFrame, pPacket, iDataLen);
     }
@@ -335,6 +329,8 @@ bool NetManager::JPGCaptureAndSend(int nHpNo, BYTE* pJpgData, int iJpgDataLen) {
         BYTE* pSendData = MakeSendData2(CMD_CAPTURE_COMPLETED, nHpNo, (int)strlen(fileName), (BYTE*)fileName, (BYTE*)gs_pBufSendDataToClient[MAXCHCNT], totLen);
         if( SendToMobileController(pSendData, totLen) ) {
             printf("[VPS:%d] [Capture] 단말기 화면 캡쳐 응답보냄: 성공(%s)\n", nHpNo, fileName);
+            m_isJpgCapture[nHpNo - 1] = false;
+            m_nJpgCaptureStartTime[nHpNo - 1] = 0;
             return true;
         } else {
             printf("[VPS:%d] [Capture] 단말기 화면 캡쳐 응답보냄: 실패(%s)\n", nHpNo, fileName);
@@ -344,20 +340,74 @@ bool NetManager::JPGCaptureAndSend(int nHpNo, BYTE* pJpgData, int iJpgDataLen) {
     return false;
 }
 
+bool NetManager::JPGCaptureFailSend(int nHpNo) {
+    char fileName[DEFAULT_STRING_SIZE] = {0,};
+
+    sprintf(fileName, "%s", VPS_SZ_JPG_CREATION_FAIL);
+
+    memset(gs_pBufSendDataToClient[MAXCHCNT], 0x00, SEND_BUF_SIZE);
+
+    int totLen = 0;
+    BYTE* pSendData = MakeSendData2(CMD_CAPTURE_COMPLETED, nHpNo, (int)strlen(fileName), (BYTE*)fileName, (BYTE*)gs_pBufSendDataToClient[MAXCHCNT], totLen);
+    if( SendToMobileController(pSendData, totLen) ) {
+        printf("[VPS:%d] [Capture] 단말기 화면 캡쳐 응답보냄: 실패(%s)\n", nHpNo, fileName);
+        return true;
+    }
+
+    return false;
+}
+
+bool NetManager::RecordStopAndSend(int nHpNo) {
+    char filePath[512] = {0,};
+
+    sprintf(filePath, "%s/%d/%s", m_strAviSavePath, nHpNo, gs_recordFileName[nHpNo - 1]);
+
+    // 파일 존재 유무 체크
+    bool doesFileExist = DoesFileExist(filePath);
+    if(!doesFileExist) {
+        sprintf(gs_recordFileName[nHpNo - 1], "%s", VPS_SZ_JPG_CREATION_FAIL);
+    }
+
+    memset(gs_pBufSendDataToClient[MAXCHCNT], 0x00, SEND_BUF_SIZE);
+
+    int totLen = 0;
+    BYTE* pSendData = MakeSendData2(CMD_CAPTURE_COMPLETED, nHpNo, (int)strlen(gs_recordFileName[nHpNo - 1]), (BYTE*)gs_recordFileName[nHpNo - 1], (BYTE*)gs_pBufSendDataToClient[MAXCHCNT], totLen);
+    if( SendToMobileController(pSendData, totLen) ) {
+        printf("[VPS:%d] [Record] 단말기 녹화 정지 응답보냄: 성공(%s)\n", nHpNo, gs_recordFileName[nHpNo - 1]);
+        return true;
+    } else {
+        printf("[VPS:%d] [Record] 단말기 녹화 정지 응답보냄: 실패(%s)\n", nHpNo, gs_recordFileName[nHpNo - 1]);
+    }
+
+    return false;
+}
+
+bool NetManager::RecordStopSend(int nHpNo) {
+    ClientObject* pHost = m_VPSSvr.FindHost(nHpNo);
+    if(pHost != NULL) {
+        int totLen = 0;
+        BYTE* pSendData = MakeSendData2(CMD_STOP_RECORDING, nHpNo, 0, NULL, (BYTE*)gs_pBufSendDataToClient[nHpNo - 1], totLen);
+        if( Send(pSendData, totLen, pHost, false) ) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 void NetManager::Record(int nHpNo, bool start) {
     if(start) {
         char filePath[512] = {0,};
-        char fileName[DEFAULT_STRING_SIZE] = {0,};
-
+    
         SYSTEM_TIME stTime;
         GetLocalTime(stTime);
 
-        sprintf(fileName, "%02d_%04d%02d%02d_%02d%02d%02d%03d.mp4",
+        sprintf(gs_recordFileName[nHpNo - 1], "%02d_%04d%02d%02d_%02d%02d%02d%03d.mp4",
                 nHpNo, 
                 stTime.year, stTime.month, stTime.day,
                 stTime.hour, stTime.minute, stTime.second, stTime.millisecond);
 
-        sprintf(filePath, "%s/%d/%s", m_strAviSavePath, nHpNo, fileName);
+        sprintf(filePath, "%s/%d/%s", m_strAviSavePath, nHpNo, gs_recordFileName[nHpNo - 1]);
 
         is_RectReady[nHpNo - 1] = false;
 
@@ -366,15 +416,17 @@ void NetManager::Record(int nHpNo, bool start) {
         // Size sizeFrame(960, 960);
         // gs_writer[nHpNo - 1].open(filePath, codec, fps, sizeFrame, true);
 
-        gs_recorder[nHpNo - 1]->StartRecord(nHpNo, filePath);
+        gs_recorder[nHpNo - 1]->StartRecord(filePath);
 
-        m_isRunRecord[nHpNo - 1] = start;
+        m_isRunRecord[nHpNo - 1] = true;
+        m_nRecStartTime[nHpNo - 1] = GetTickCount();
 
         m_mirror.SendKeyFrame(nHpNo);
 
         m_nRecordStartCommandCountReceived[nHpNo - 1]++;
     } else {
-        m_isRunRecord[nHpNo - 1] = start;
+        m_isRunRecord[nHpNo - 1] = false;
+        m_nRecStartTime[nHpNo - 1] = 0;
 
         // gs_writer[nHpNo - 1].release();
         
@@ -436,6 +488,10 @@ bool NetManager::DoMirrorVideoRecording(int nHpNo, short usCmd, bool isKeyFrame,
         }
     }
 
+    if(m_isJpgCapture[nHpNo - 1] && isKeyFrame) {
+        JPGCaptureAndSend(nHpNo, pJpgSrc, nJpgSrcLen);
+    } 
+
     Mat rawData = Mat(1, nJpgSrcLen, CV_8SC1, (void*)pJpgSrc).clone();
     Mat rawImage = imdecode(rawData, IMREAD_COLOR);
 
@@ -474,9 +530,20 @@ bool NetManager::DoMirrorVideoRecording(int nHpNo, short usCmd, bool isKeyFrame,
         return false;
     }
 
-    gs_recorder[nHpNo - 1]->EnQueue(gs_lastScene[nHpNo - 1].data);
+    if( gs_recorder[nHpNo - 1]->EnQueue(gs_lastScene[nHpNo - 1].data) ) {
+        // compress count 업데이트
+        m_iCompressedCount[nHpNo - 1]++;
+    }
 
     return true;
+}
+
+bool NetManager::HeartbeatSendToDC() {
+    if(m_VPSSvr.GetMobileController() == NULL) return false;
+
+    int totLen = 0;
+    BYTE* pSendData = MakeSendData2(CMD_MONITOR_VPS_HEARTBEAT, 0, 0, NULL, (BYTE*)gs_pBufSendDataToClient[MAXCHCNT], totLen);
+    return SendToMobileController(pSendData, totLen);
 }
 
 bool NetManager::CloseClient(ClientObject* pClient) {
@@ -491,7 +558,7 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
 //    printf("Received Data : %d, %d, %d\n", nHpNo, usCmd, iDataLen);
 
     if(iDataLen > RECV_BUFFER_SIZE || len < CMD_HEAD_SIZE + CMD_TAIL_SIZE) {
-        // 잘못된 길이의 패킷
+        // 잘못된 길이의 패킷   
         return false;
     }
 
@@ -663,7 +730,7 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
         case CMD_STOP: {
             m_isOnService[nHpNo - 1] = false;
 
-            printf("[VPS:%d] Stop Command 명령 받음\n", nHpNo);
+            printf("[VPS:%d] Stop Command 명령 받음 : 채널 서비스 종료 처리 수행\n", nHpNo);
 
             // test code
             m_mirror.StopMirroring(nHpNo);
@@ -700,6 +767,7 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
             m_nCaptureCommandReceivedCount[nHpNo - 1]++;
 
             m_isJpgCapture[nHpNo - 1] = true;
+            m_nJpgCaptureStartTime[nHpNo - 1] = GetTickCount();
 
             printf("[VPS:%d] [Capture] 단말기 화면 캡쳐 명령 받음\n", nHpNo);
 
@@ -750,6 +818,11 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
         }
         break;
 
+        case CMD_CAPTURE_COMPLETED: {
+            RecordStopAndSend(nHpNo);
+        }
+        break;
+
         default: {
             return SendToMobileController((BYTE*)pRcvData, len);
         }
@@ -762,11 +835,56 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
 void NetManager::UpdateState(int id) {
     switch(id) {
         case TIMERID_JPGFPS_1SEC: {
-             
+            // fps, jpg capture
+            for(int i = 0; i < MAXCHCNT; i++) {
+                m_iCaptureCountOld[i] = m_iCaptureCount[i];
+                m_iCompressedCountOld[i] = m_iCompressedCount[i];
+                m_iSendCountOld[i] = m_iSendCount[i];
+                m_iCaptureCount[i] = 0;
+                m_iCompressedCount[i] = 0;
+                m_iSendCount[i] = 0;
+
+                if(m_isOnService[i]) {
+                    printf("[VPS:%d] FPS 캡쳐: %d, 압축: %d, 전송: %d\n", (i + 1), m_iCaptureCountOld[i], m_iCompressedCountOld[i], m_iSendCountOld[i]);
+                }
+
+                if(m_isJpgCapture[i]
+                    && GetTickCount() - m_nJpgCaptureStartTime[i] > VPS_CAPTURE_RESPONSE_WAITING_TIME) {
+                    // 에러와 함께 캡쳐 응답 보냄
+                    JPGCaptureFailSend(i + 1);
+
+                    m_isJpgCapture[i] = false;
+                    m_nJpgCaptureStartTime[i] = 0;
+                }
+            }
+
+            // Record 예외 처리
+            for(int i = 0; i < MAXCHCNT; i++) {
+                if(m_isRunRecord[i]) {
+                    static const int RECORDING_TIME = 30 * 60 * 1000;
+                    ULONGLONG nElapsedTime = GetTickCount() - m_nRecStartTime[i];
+
+                    // 처음에는 30초 더 기다렸으나, 자동화툴에서는 부족하여 충분하게 3분으로 늘림(33분)
+                    if( nElapsedTime >= (RECORDING_TIME + (3 * 60 * 1000)) ) {
+                        // 클라이언트로 녹화 중지 명령을 보낸 후,
+                        // 3분(33분 - 30분)동안 녹화 중지 명령이 안오면, VPS 자체적으로 녹화 중지함
+                        // 자동화 시에는 녹화 중지 명령을 받을 클라이언트가 없으므로, 33분에 녹화 중지됨
+                        Record(i + 1, false);
+                    } else if(nElapsedTime >= RECORDING_TIME) {
+                        // 녹화 시간 30분 경과하면, 클라이언트로 녹화 중지 명령 보냄
+                        RecordStopSend(i + 1);
+                    }
+                } 
+            }
         }
         break;
 
         case TIMERID_10SEC: {
+            HeartbeatSendToDC();
+        }
+        break;
+
+        case TIMERID_20SEC: {
 
         }
         break;

@@ -4,7 +4,7 @@
 => ipcs
 
 공유 메모리 설정 확인
-=> ipcs -Msh
+=> ipcs -M
 
 공유 메모리 삭제
 => ipcrm -m ‘ID'
@@ -18,3 +18,6 @@ Shmall 값을 변경(shmmax / 4096으로 설정)
 Kern.sysv.shmall=1024
 
 => sudo sysctl -w kern.sysv.shmall=524288
+
+참조사이트
+=> http://www.spy-hill.com/help/apple/SharedMemory.html

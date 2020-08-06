@@ -1,13 +1,19 @@
 #include "VideoRecorder.h"
 
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #include <unistd.h>
 #include <thread>
 #include <vector>
 
 using namespace std;
 
-VideoRecorder::VideoRecorder(void* sharedMem) {
+VideoRecorder::VideoRecorder(void* sharedMem, int nHpNo, int retPort) {
     m_isRunning = false;
+
+    m_nHpNo = nHpNo;
+    m_retPort = retPort;
 
     m_swsctx = sws_getCachedContext(NULL, 960, 960, AV_PIX_FMT_BGR24, 960, 960,AV_PIX_FMT_YUV420P, SWS_BICUBIC, NULL, NULL, NULL);
 
@@ -16,6 +22,7 @@ VideoRecorder::VideoRecorder(void* sharedMem) {
 
 #if ENABLE_SHARED_MEMORY
     m_sharedMem = sharedMem;
+    m_i64Img_ID = 0;
 #endif
 }
 
@@ -32,9 +39,13 @@ VideoRecorder::~VideoRecorder() {
     av_frame_free(&m_yuv420p);
 }
 
-void VideoRecorder::StartRecord(int nHpNo, char* filePath) {
+void VideoRecorder::StartRecord(char* filePath) {
     m_inCount = 0;
     m_outCount = 0;
+
+#if ENABLE_SHARED_MEMORY
+    ClearVideoMem(m_nHpNo - 1, m_sharedMem, MEM_SHARED_MAX_COUNT);
+#endif
 
     if(OpenEncoder(filePath)) {
         thread([=]() {
@@ -45,24 +56,41 @@ void VideoRecorder::StartRecord(int nHpNo, char* filePath) {
 
 void VideoRecorder::StopRecord()
 {
-    SetThreadRunning(false);
+   SetThreadRunning(false);
 }
 
-void VideoRecorder::EnQueue(unsigned char* pImgData) {
+bool VideoRecorder::EnQueue(unsigned char* pImgData) {
     if( IsThreadRunning() ) {
         m_inCount++;
 
-        m_recFrame.msec = GetTickCount();
+        unsigned long time = GetTickCount();
 
         av_image_fill_arrays(m_rgb32->data, m_rgb32->linesize, (uint8_t*)pImgData, AV_PIX_FMT_BGR24, 960, 960, 1);
-        av_image_fill_arrays(m_yuv420p->data, m_yuv420p->linesize, (uint8_t*)m_recFrame.btImg, AV_PIX_FMT_YUV420P, 960, 960, 1);
-        sws_scale(m_swsctx, m_rgb32->data, m_rgb32->linesize, 0, 960, m_yuv420p->data, m_yuv420p->linesize);
         
 #if ENABLE_SHARED_MEMORY
+        HDCAP* pInCap = (HDCAP*)GetFreeInVideoMem(m_nHpNo - 1, m_sharedMem, MEM_SHARED_MAX_COUNT);
+        if(pInCap != NULL) {
+            pInCap->ui64ID = IncreamentImageId();
+            pInCap->msec = time;
+
+            av_image_fill_arrays(m_yuv420p->data, m_yuv420p->linesize, (uint8_t*)pInCap->btImg, AV_PIX_FMT_YUV420P, 960, 960, 1);
+            sws_scale(m_swsctx, m_rgb32->data, m_rgb32->linesize, 0, 960, m_yuv420p->data, m_yuv420p->linesize);    
+
+            pInCap->accessMode = TYPE_ACCESS_DATA;  // 데이터 있음
+        }
 #else
+        m_recFrame.msec = time;
+
+        av_image_fill_arrays(m_yuv420p->data, m_yuv420p->linesize, (uint8_t*)m_recFrame.btImg, AV_PIX_FMT_YUV420P, 960, 960, 1);
+        sws_scale(m_swsctx, m_rgb32->data, m_rgb32->linesize, 0, 960, m_yuv420p->data, m_yuv420p->linesize);
+
         m_recQueue.EnQueue(&m_recFrame);
 #endif
+
+        return true;
     }
+
+    return false;
 }
 
 void VideoRecorder::SetThreadRunning(bool isRunning) {
@@ -117,7 +145,14 @@ void VideoRecorder::OnRecord() {
     // encoding loop
     while(IsThreadRunning()) {
 #if ENABLE_SHARED_MEMORY
-        {
+        HDCAP* pInCap = (HDCAP*)GetDataInVideoMem(m_nHpNo - 1, m_sharedMem, MEM_SHARED_MAX_COUNT);
+        if(pInCap != NULL) {
+            pInCap->accessMode = TYPE_ACESS_READING;    // 데이터 읽는 중, 엑세스 금지
+
+            memcpy( pFrame, pInCap, sizeof(HDCAP) );
+
+            pInCap->accessMode = TYPE_ACCESS_EMPTY;
+
 #else
         if(m_recQueue.DeQueue(pFrame)) {
 #endif
@@ -141,7 +176,7 @@ void VideoRecorder::OnRecord() {
                 break;
             }
 
-            usleep(1);
+            this_thread::sleep_for( chrono::milliseconds(1) );
 
             // rescale packet timestamp
             pkt.duration = 1;
@@ -178,6 +213,8 @@ void VideoRecorder::OnRecord() {
 #else
     m_recQueue.ClearQueue();
 #endif
+
+    RecordStopAndSend();
 }
 
 bool VideoRecorder::OpenEncoder(char* filePath) {
@@ -187,6 +224,8 @@ bool VideoRecorder::OpenEncoder(char* filePath) {
 
     AVOutputFormat* fmt = av_guess_format(NULL, filePath, NULL);
     m_outctx->oformat = fmt;
+
+    printf("FILE PATH : %s\n", filePath);
 
     ret = avio_open2(&m_outctx->pb, filePath, AVIO_FLAG_WRITE, NULL, NULL);
     if(ret < 0) {
@@ -251,6 +290,98 @@ bool VideoRecorder::OpenEncoder(char* filePath) {
     return true;
 }
 
-void* VideoRecorder::GetFreeInVideoMem(int nHpNo, void* pCap, int maxCount) {
+#if ENABLE_SHARED_MEMORY
+void* VideoRecorder::GetFreeInVideoMem(int iCh, void* pCap, int maxCount) {
+    int iChPerMemCnt = maxCount / MAXCHCNT; // 채널당 몇개의 메모리를 사용하는지 ...
+    int iStart = iCh * iChPerMemCnt;
+    int iEnd = iStart + iChPerMemCnt;
+    HDCAP* pRecCap = (HDCAP*)pCap;
 
+    for(int i = iStart; i < iEnd; i++) {
+        if(pRecCap[i].accessMode == TYPE_ACCESS_EMPTY) {
+            pRecCap[i].accessMode = TYPE_ACCESS_WRITTING;   // 일단 먼저 예약, 쓰는 중, 엑세스 금지
+            return (void*)&pRecCap[i];
+        }
+    }
+
+    return NULL;
+}
+
+void* VideoRecorder::GetDataInVideoMem(int iCh, void* pCap, int maxCount) {
+    int iChPerMemCnt = maxCount / MAXCHCNT; // 채널당 몇개의 메모리를 사용하는지 ...
+    int iStart = iCh * iChPerMemCnt;
+    int iEnd = iStart + iChPerMemCnt;
+    HDCAP* pRecCap = (HDCAP*)pCap;
+
+    int iFnd = -1;
+    uint64_t iOldID = 0xFFFFFFFFFFFFFFFF;
+    for(int i = iStart; i < iEnd; i++) {
+        if(pRecCap[i].accessMode == TYPE_ACCESS_DATA) {
+            if(pRecCap[i].ui64ID < iOldID) {
+                iOldID = pRecCap[i].ui64ID;
+                iFnd = i;
+            }
+        }
+    }
+
+    if(iFnd < iStart || iFnd >= iEnd) return NULL;
+
+    return (void*)&pRecCap[iFnd];
+}
+
+void VideoRecorder::ClearVideoMem(int iCh, void* pCap, int maxCount) {
+    int iChPerMemCnt = maxCount / MAXCHCNT; // 채널당 몇개의 메모리를 사용하는지 ...
+    int iStart = iCh * iChPerMemCnt;
+    int iEnd = iStart + iChPerMemCnt;
+    HDCAP* pRecCap = (HDCAP*)pCap;
+
+    for(int i = iStart; i < iEnd; i++) {
+        memset( &pRecCap[i], 0x00, sizeof(HDCAP) );
+    }
+
+    m_i64Img_ID = 0;
+}
+
+ULONGLONG VideoRecorder::IncreamentImageId() {
+    return m_i64Img_ID++;
+}
+#endif
+
+void VideoRecorder::RecordStopAndSend() {
+    Socket sock = socket(PF_INET, SOCK_STREAM, 0);
+    if(sock == INVALID_SOCKET) {
+        printf("[VPS:%d] Record Result sock() error[%d]\n", m_nHpNo, errno);
+        return;
+    }
+
+    // 종료방식
+    // 즉시 연결을 종료한다. 상대방에게는 FIN이나 RTS 시그널이 전달된다.
+    short l_onoff = 1, l_linger = 0;    
+    linger opt = {l_onoff, l_linger};
+    int state = setsockopt( sock, SOL_SOCKET, SO_LINGER, (char*)&opt, sizeof(opt) );
+    if(state) {
+        printf("[VPS:%d] Record Result socket setsockopt() SO_LINGER error\n", m_nHpNo);
+        return;
+    }
+
+    struct sockaddr_in servAddr;
+    memset( &servAddr, 0x00, sizeof(servAddr) );
+    servAddr.sin_family = AF_INET;
+    servAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
+    servAddr.sin_port = htons(m_retPort);
+
+    if( connect( sock, (sockaddr*)&servAddr, sizeof(servAddr) ) == 0 ) {
+        int totLen = 0;
+        BYTE* pSendData = MakeSendData2(CMD_CAPTURE_COMPLETED, m_nHpNo, 0, NULL, (BYTE*)m_pBufSendData, totLen);
+        if(pSendData != NULL) {
+            int ret = (int)write(sock, pSendData, totLen);
+            if(ret == totLen) {
+                printf("[VPS:%d] [Record] 단말기 녹화 정지 응답 보냄: 성공\n", m_nHpNo);
+            } else {
+                printf("[VPS:%d] [Record] 단말기 녹화 정지 응답 보냄: 실패\n", m_nHpNo);
+            }
+        }
+    }
+
+    this_thread::sleep_for( chrono::milliseconds(100) );    // 소켓 데이터 처리를 위한 기다림 ...
 }

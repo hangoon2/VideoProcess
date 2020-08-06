@@ -16,12 +16,12 @@ extern "C" {
 
 class VideoRecorder {
 public:
-    VideoRecorder(void* sharedMem);
+    VideoRecorder(void* sharedMem, int nHpNo, int retPort);
     virtual ~VideoRecorder();
 
-    void StartRecord(int nHpNo, char* filePath);
+    void StartRecord(char* filePath);
     void StopRecord();
-    void EnQueue(unsigned char* pImgData);
+    bool EnQueue(unsigned char* pImgData);
 
     void OnRecord();
     void SetThreadRunning(bool isRunning);
@@ -29,24 +29,34 @@ public:
 
 private:
     bool OpenEncoder(char * filePath);
-    void* GetFreeInVideoMem(int nHpNo, void* pCap, int maxCount);
+
+#if ENABLE_SHARED_MEMORY
+    void* GetFreeInVideoMem(int iCh, void* pCap, int maxCount);
+    void* GetDataInVideoMem(int iCh, void* pCap, int maxCount);
+    void ClearVideoMem(int iCh, void* pCap, int maxCount);
+    ULONGLONG IncreamentImageId();
+#endif
+
+    void RecordStopAndSend();
 
 private:
     bool m_isRunning;
 
+    int m_nHpNo;
+
+    int m_retPort;  // 결과를 전송할 server port
+    BYTE m_pBufSendData[SEND_BUF_SIZE];
+
 #if ENABLE_SHARED_MEMORY
     void* m_sharedMem;
+    ULONGLONG m_i64Img_ID;
 #else
     Rec_Queue m_recQueue;
+    HDCAP m_recFrame;
 #endif
 
-    HDCAP m_recFrame;
-
-    int m_inCount;
-    int m_outCount;
-
-    int m_lastMsec;
-    int m_lastRecMsec;
+    ULONGLONG m_inCount;
+    ULONGLONG m_outCount;
 
     AVFormatContext* m_outctx;
     AVCodec* m_codec;

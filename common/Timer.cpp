@@ -13,8 +13,8 @@ void Timer::Start(int interval, function<void(int)> func) {
 
     thread([=]() {
         while(m_isExecute) {
-            func(interval);
             this_thread::sleep_for( chrono::milliseconds(interval) );
+            func(interval);
         }    
     }).detach();
 }

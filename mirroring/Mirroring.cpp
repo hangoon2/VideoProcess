@@ -139,7 +139,7 @@ void Mirroring::HandleJpegPacket(BYTE* pPacket, int iDataLen, short usCmd, int n
                 iDataLen = iDataLen - nJpgDataSize + nNewJpgDataSize;
                 *(int*)&pPacket[1] = htonl(iDataLen);
 
-                *(short*)&pPacket[CMD_HEAD_SIZE + iDataLen] = htons( CalChecksum((ONYPACKET_UINT16*)(pPacket + 1), iDataLen + CMD_HEAD_SIZE - 1) );
+                *(short*)&pPacket[CMD_HEAD_SIZE + iDataLen] = htons( CalChecksum((UINT16*)(pPacket + 1), iDataLen + CMD_HEAD_SIZE - 1) );
                 *&pPacket[CMD_HEAD_SIZE + iDataLen + CMD_TAIL_SIZE - 1] = CMD_END_CODE;
             }
         }
@@ -187,7 +187,7 @@ void Mirroring::HandleJpegPacket(BYTE* pPacket, int iDataLen, short usCmd, int n
                 iDataLen = iDataLen - nJpgDataSize + nNewJpgDataSize;
                 *(int*)&pPacket[1] = htonl(iDataLen);
 
-                *(short*)&pPacket[CMD_HEAD_SIZE + iDataLen] = htons( CalChecksum((ONYPACKET_UINT16*)(pPacket + 1), iDataLen + CMD_HEAD_SIZE - 1) );
+                *(short*)&pPacket[CMD_HEAD_SIZE + iDataLen] = htons( CalChecksum((UINT16*)(pPacket + 1), iDataLen + CMD_HEAD_SIZE - 1) );
                 *&pPacket[CMD_HEAD_SIZE + iDataLen + CMD_TAIL_SIZE - 1] = CMD_END_CODE;
             }
         } else if( usCmd == CMD_JPG_DEV_VERT_IMG_VERT && isWideDevice ) {
@@ -203,7 +203,7 @@ void Mirroring::HandleJpegPacket(BYTE* pPacket, int iDataLen, short usCmd, int n
                 iDataLen = iDataLen - nJpgDataSize + nNewJpgDataSize;
                 *(int*)&pPacket[1] = htonl(iDataLen);
 
-                *(short*)&pPacket[CMD_HEAD_SIZE + iDataLen] = htons( CalChecksum((ONYPACKET_UINT16*)(pPacket + 1), iDataLen + CMD_HEAD_SIZE - 1) );
+                *(short*)&pPacket[CMD_HEAD_SIZE + iDataLen] = htons( CalChecksum((UINT16*)(pPacket + 1), iDataLen + CMD_HEAD_SIZE - 1) );
                 *&pPacket[CMD_HEAD_SIZE + iDataLen + CMD_TAIL_SIZE - 1] = CMD_END_CODE;
             }
         } else if( usCmd == CMD_JPG_DEV_VERT_IMG_HORI && isWideDevice ) {
@@ -219,7 +219,7 @@ void Mirroring::HandleJpegPacket(BYTE* pPacket, int iDataLen, short usCmd, int n
                 iDataLen = iDataLen - nJpgDataSize + nNewJpgDataSize;
                 *(int*)&pPacket[1] = htonl(iDataLen);
 
-                *(short*)&pPacket[CMD_HEAD_SIZE + iDataLen] = htons( CalChecksum((ONYPACKET_UINT16*)(pPacket + 1), iDataLen + CMD_HEAD_SIZE - 1) );
+                *(short*)&pPacket[CMD_HEAD_SIZE + iDataLen] = htons( CalChecksum((UINT16*)(pPacket + 1), iDataLen + CMD_HEAD_SIZE - 1) );
                 *&pPacket[CMD_HEAD_SIZE + iDataLen + CMD_TAIL_SIZE - 1] = CMD_END_CODE;
             }
         }

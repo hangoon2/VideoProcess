@@ -12,9 +12,9 @@
 
 using namespace std;
 
-ONYPACKET_UINT16 CalChecksum(unsigned short* ptr, int nbytes) {
-    ONYPACKET_INT32 sum;
-    ONYPACKET_UINT16 answer;
+UINT16 CalChecksum(UINT16* ptr, int nbytes) {
+    INT64 sum;
+    UINT16 answer;
 
     sum =0;
     while(nbytes > 1) {
@@ -33,11 +33,11 @@ ONYPACKET_UINT16 CalChecksum(unsigned short* ptr, int nbytes) {
     return answer;
 }
 
-uint16_t SwapEndianU2(uint16_t wValue) {
-    return (uint16_t)((wValue >> 8) | (wValue << 8));
+UINT16 SwapEndianU2(UINT16 wValue) {
+    return (UINT16)((wValue >> 8) | (wValue << 8));
 }
 
-uint32_t SwapEndianU4(uint32_t nValue) {
+uint32_t SwapEndianU4(UINT nValue) {
     char bTmp;
     bTmp = *((char*)&nValue + 3);
     *((char*)&nValue + 3) = *((char*)&nValue + 0);
@@ -61,12 +61,12 @@ BYTE* MakeSendData2(short usCmd, int nHpNo, int dataLen, BYTE* pData, BYTE* pDst
     memcpy(pDstData, (char*)&mStartFlag, sizeofData);
     dataSum = sizeofData;
 
-    ONYPACKET_INT mDataSize = htonl(dataLen);
+    INT mDataSize = htonl(dataLen);
     sizeofData = sizeof(mDataSize);
     memcpy(pDstData + dataSum, (char*)&mDataSize, sizeofData);
     dataSum += sizeofData;
 
-    ONYPACKET_UINT16 mCommandCode = htons(usCmd);
+    UINT16 mCommandCode = htons(usCmd);
     sizeofData = sizeof(mCommandCode);
     memcpy(pDstData + dataSum, (char*)&mCommandCode, sizeofData);
     dataSum += sizeofData;
@@ -82,7 +82,7 @@ BYTE* MakeSendData2(short usCmd, int nHpNo, int dataLen, BYTE* pData, BYTE* pDst
         dataSum += sizeofData;
     }
 
-    ONYPACKET_UINT16 mChecksum = htons( CalChecksum((ONYPACKET_UINT16*)(pDstData + 1), ntohl(mDataSize) + CMD_HEAD_SIZE - 1) );
+    UINT16 mChecksum = htons( CalChecksum((UINT16*)(pDstData + 1), ntohl(mDataSize) + CMD_HEAD_SIZE - 1) );
     sizeofData = sizeof(mChecksum);
     memcpy(pDstData + dataSum, (char*)&mChecksum, sizeofData);
     dataSum += sizeofData;
@@ -113,10 +113,14 @@ void GetLocalTime(SYSTEM_TIME &stTime) {
     stTime.millisecond = time.tv_usec / 1000;
 }
 
-unsigned long GetTickCount() {
-    timeval tv;
-    gettimeofday(&tv, NULL);
-    return (unsigned long)(tv.tv_sec * 1000 + tv.tv_usec / 1000);
+ULONGLONG GetTickCount() {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (ts.tv_sec * 1000ull) + (ts.tv_nsec/1000ull/1000ull);
+
+    // timeval tv;
+    // gettimeofday(&tv, NULL);
+    // return (ULONG)(tv.tv_sec * 1000 + tv.tv_usec / 1000);
 }
 
 bool DoesFileExist(const char* filePath) {
