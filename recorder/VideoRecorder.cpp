@@ -384,4 +384,7 @@ void VideoRecorder::RecordStopAndSend() {
     }
 
     this_thread::sleep_for( chrono::milliseconds(100) );    // 소켓 데이터 처리를 위한 기다림 ...
+
+    shutdown(sock, SHUT_RDWR);
+    close(sock);
 }

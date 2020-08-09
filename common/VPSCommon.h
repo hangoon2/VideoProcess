@@ -100,6 +100,8 @@ typedef long                INT64;
 // VPS -> VD
 #define CMD_REQUEST_MAX_RESOLUTION      21005
 
+// Monitor 연결 해제(VPS -> DC)
+#define CMD_MIRRORING_STOPPED           22002
 // Device 연결끊김 통지(DC -> VPS -> VD)
 #define CMD_DEVICE_DISCONNECTED         22003
 
@@ -117,6 +119,7 @@ typedef long                INT64;
 
 // vps가 살아있는 상태임을 알리는 메시지(VPS -> DC)
 #define CMD_MONITOR_VPS_HEARTBEAT       32000
+#define CMD_MONITOR_VIDEO_FPS_STATUS    32001
 // 디바이스가 연결된 상태임을 알리는 메시지(VD -> VPS)
 #define CMD_MONITOR_VD_HEARTBEAT        32100
 

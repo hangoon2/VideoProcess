@@ -24,6 +24,15 @@ public:
     void ClientConnected(ClientObject* pClient);
     void ClientDisconnected(ClientObject* pClient);
 
+    void Record(int nHpNo, bool start);
+    
+    void CleanupClient(int nHpNo);
+    bool ClosingClient(ClientObject* pClient);
+
+    void StopVideoServiceIfNoClientExist();
+    bool CloseClientManualEx(int nHpNo);
+    void CloseClientManual(ClientObject* pClient);
+
 private:
     bool SendToMobileController(BYTE* pData, int iLen, bool force = false);
     bool SendToClient(short usCmd, int nHpNo, BYTE* pData, int iLen, int iKeyFrameNo);
@@ -33,12 +42,12 @@ private:
     bool JPGCaptureFailSend(int nHpNo);
     bool RecordStopAndSend(int nHpNo);
     bool RecordStopSend(int nHpNo);
-    void Record(int nHpNo, bool start);
+    bool SendLastRecordStopResponse(int nHpNo);
     bool DoMirrorVideoRecording(int nHpNo, short usCmd, bool isKeyFrame, BYTE* pPacket, int iDataLen);
 
     bool HeartbeatSendToDC();
+    bool VideoFpsCheckAndSend(void* pData);
 
-    bool CloseClient(ClientObject* pClient);
     bool WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, int len);
 
 private:
@@ -58,9 +67,15 @@ private:
     bool m_isRunRecord[MAXCHCNT];
     ULONGLONG m_nRecStartTime[MAXCHCNT];
 
+    bool m_isReceivedRecordStartCommand[MAXCHCNT];
     int m_nRecordStartCommandCountReceived[MAXCHCNT];
     int m_nRecordStopCommandCountReceived[MAXCHCNT];
+    int m_nRecordCompletionCountSent[MAXCHCNT];
+    
     int m_nCaptureCommandReceivedCount[MAXCHCNT];
+    int m_nCaptureCompletionCountSent[MAXCHCNT];
+
+    int m_iMirrorVideoInputCount[MAXCHCNT];
 
     UINT m_iCaptureCount[MAXCHCNT];
     UINT m_iCaptureCountOld[MAXCHCNT];
@@ -70,6 +85,10 @@ private:
     UINT m_iSendCountOld[MAXCHCNT];
 
     int m_iRefreshCH[MAXCHCNT];
+
+    bool m_isToSkipFailureReport[MAXCHCNT];
+
+    BYTE m_byOldVideoFpsStatus[MAXCHCNT];
 
     Timer m_timer_1;
     Timer m_timer_10;

@@ -7,7 +7,8 @@ OPENCV_INC=-I /usr/local/include/opencv4
 LDLIBS=-L /usr/local/lib -lopencv_core -lopencv_imgcodecs -lopencv_imgproc -lopencv_videoio -lpthread -lavformat -lavcodec -lavutil -lswscale
 
 OBJS=main.o NetManager.o AsyncMediaServerSocket.o ClientObject.o ClientList.o Mirroring.o \
-		MIR_Client.o VPSJpeg.o VPSCommon.o Timer.o Rec_MemPool.o Rec_Queue.o VideoRecorder.o
+		MIR_Client.o MIR_MemPool.o MIR_Queue.o MIR_QueueHandler.o VPSJpeg.o VPSCommon.o \
+		Timer.o Rec_MemPool.o Rec_Queue.o VideoRecorder.o
 
 $(TARGET): $(OBJS)
 	$(CC) -o $@ $(OBJS) $(LDLIBS)
@@ -33,6 +34,15 @@ Mirroring.o: mirroring/Mirroring.cpp
 
 MIR_Client.o: mirroring/MIR_Client.cpp
 	$(CC) -c mirroring/MIR_Client.cpp $(CPPFLAGS)
+
+MIR_MemPool.o: mirroring/MIR_MemPool.cpp
+	$(CC) -c mirroring/MIR_MemPool.cpp $(CPPFLAGS)
+
+MIR_Queue.o: mirroring/MIR_Queue.cpp
+	$(CC) -c mirroring/MIR_Queue.cpp $(CPPFLAGS)
+
+MIR_QueueHandler.o: mirroring/MIR_QueueHandler.cpp
+	$(CC) -c mirroring/MIR_QueueHandler.cpp $(CPPFLAGS)
 
 VPSJpeg.o: mirroring/VPSJpeg.cpp
 	$(CC) -c mirroring/VPSJpeg.cpp $(CPPFLAGS) $(OPENCV_FLAGS) $(OPENCV_INC)

@@ -20,6 +20,7 @@ public:
 
     ClientObject* FindHost(int nHpNo);
     ClientObject* FindGuest(int nHpNo, char* id);
+    ClientObject* FindMonitor(int nHpNo);
 
     void UpdateClient(ClientObject* pClient);
 

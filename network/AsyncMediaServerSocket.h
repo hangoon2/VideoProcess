@@ -14,8 +14,10 @@ public:
     bool OnClose(Socket sock);
     bool OnSend(Socket sock, BYTE* pData, int iLen, bool force);
 
+    ClientObject* Find(Socket sock);
     ClientObject* FindHost(int nHpNo);
     ClientObject* FindGuest(int nHpNo, char* id);
+    ClientObject* FindMonitor(int nHpNo);
 
     ClientObject* GetMobileController();
     void UpdateClientList(ClientObject* pClient);
@@ -27,6 +29,8 @@ private:
     void OnAccept(int efd, ServerSocket serverSock);
     void OnRead(int efd, Socket sock);
     void OnServerEvent(int efd, ServerSocket serverSock, int waitms);
+    void CloseAllGuest(int nHpNo);
+    void DeleteClient(ClientObject* pClient);
 
 private:
     ServerSocket m_serverSock;

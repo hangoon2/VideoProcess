@@ -290,12 +290,14 @@ void MIR_Client::CleanUpRunClientThreadData() {
 
         if(m_mirrorSocket != INVALID_SOCKET) {
             printf("[VPS:%d] Mirroring Socket closed\n", m_nHpNo);
+            shutdown(m_mirrorSocket, SHUT_RDWR);
             close(m_mirrorSocket);
             m_mirrorSocket = INVALID_SOCKET;
         }
 
         if(m_controlSocket != INVALID_SOCKET) {
             printf("[VPS:%d] Control Socket closed\n", m_nHpNo);
+            shutdown(m_controlSocket, SHUT_RDWR);
             close(m_controlSocket);
             m_controlSocket = INVALID_SOCKET;
         }

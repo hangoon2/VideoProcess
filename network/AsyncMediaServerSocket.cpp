@@ -102,20 +102,82 @@ void AsyncMediaServerSocket::OnRead(int efd, Socket sock) {
     if( n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK) ) {
         return;
     }
-
+ 
+    printf("=========> ON READ CALL ONCLOSE =====> \n");
     OnClose(sock);
 }
 
 bool AsyncMediaServerSocket::OnClose(Socket sock) {
+    // close socket
+    shutdown(sock, SHUT_RDWR);
+    close(sock);
+
     ClientObject* pClient = m_clientList.Find(sock);
-    if(pClient != NULL && pClient->m_clientSock != INVALID_SOCKET) {
-        ((NetManager*)m_pNetMgr)->ClientDisconnected(pClient);
+    if(pClient != NULL) {  
+        printf("[VPS:%d] Socket %d closed\n", pClient->m_nHpNo, sock);
 
-        m_clientList.Delete(sock);
+        int nHpNo = pClient->m_nHpNo;
+        int nClientType = pClient->m_nClientType;
+        bool doesHostExist = FindHost(nHpNo) == NULL ? false : true;
+        bool doesMonitorExist = FindMonitor(nHpNo) == NULL ? false : true;
+        bool isOnService = ((NetManager*)m_pNetMgr)->IsOnService(nHpNo);
 
-        delete pClient;
-        pClient = NULL;
+        if(nClientType == CLIENT_TYPE_UNKNOWN) {
+            // Video Recorder가 Unknown type으로 연결했다가 종료함
+            DeleteClient(pClient);
 
+            return true;
+        }
+
+        if( pClient == GetMobileController() ) {
+            m_clientList.Delete(sock);
+            
+            delete pClient;
+            pClient = NULL;
+            
+            return true;
+        }
+
+        if( !pClient->m_isExitCommandReceived && nClientType != CLIENT_TYPE_MONITOR ) {
+            // 비정상적으로 연결 해제된 Client 정보를 저장하되
+            // m_SocketClient 변수값은 초기화한다.
+            printf("========= 비정상 종료 처리 필요 ==========\n");
+            return true;
+        }
+
+        if(nClientType == CLIENT_TYPE_HOST) {
+            // 동영상 녹화 정지
+            // Host와 TestAutomation에서만 녹화 가능한데,
+            // 이 둘은 서로 함께 사용할 수 없으므로, !isOnService 검사는 제거함
+            if(!doesHostExist) {
+                // 해당 채널 레코드 종료 보냄(자동화)
+                ((NetManager*)m_pNetMgr)->Record(nHpNo, false);
+            }
+            if(!doesHostExist && !doesMonitorExist && !isOnService) {
+                ((NetManager*)m_pNetMgr)->CleanupClient(nHpNo);
+            }
+
+            ((NetManager*)m_pNetMgr)->ClosingClient(pClient);
+
+            usleep(100);
+            CloseAllGuest(nHpNo);
+
+            DeleteClient(pClient);
+        } else if(nClientType == CLIENT_TYPE_MONITOR) {
+            // 자동화 테스트 중에는 Monitor 모드의 VD가 닫혀도 Clean Up 처리를 하지 않기 위해
+            // isOnService 체크함
+            if(!doesHostExist && !doesMonitorExist && !isOnService) {
+                ((NetManager*)m_pNetMgr)->CleanupClient(nHpNo);
+            }
+
+            if(!doesMonitorExist) {
+                // DC로 모니터 연결해제 패킷 보냄
+                ((NetManager*)m_pNetMgr)->ClosingClient(pClient);
+            }
+
+            DeleteClient(pClient);
+        }
+        
         return true;
     }
 
@@ -191,6 +253,10 @@ int AsyncMediaServerSocket::InitSocket(void* pNetMgr, int port) {
     return 0;
 }
 
+ClientObject* AsyncMediaServerSocket::Find(Socket sock) {
+    return m_clientList.Find(sock);
+}
+
 ClientObject* AsyncMediaServerSocket::FindHost(int nHpNo) {
     return m_clientList.FindHost(nHpNo);
 }
@@ -203,10 +269,42 @@ ClientObject* AsyncMediaServerSocket::GetMobileController() {
     return m_clientList.GetMobileController();
 }
 
+ClientObject* AsyncMediaServerSocket::FindMonitor(int nHpNo) {
+    return m_clientList.FindMonitor(nHpNo);
+}
+
 void AsyncMediaServerSocket::UpdateClientList(ClientObject* pClient) {
     m_clientList.UpdateClient(pClient);
 }
 
 ClientObject** AsyncMediaServerSocket::GetClientList(int nHpNo) {
     return m_clientList.GetClientList(nHpNo);
+}
+
+void AsyncMediaServerSocket::CloseAllGuest(int nHpNo) {
+    ClientObject** pClientList = GetClientList(nHpNo);
+
+    for(int i = 0; i < MAXCLIENT_PER_CH; i++) {
+        ClientObject* pClient = pClientList[i];
+        if(pClient != NULL
+            && pClient->m_nClientType == CLIENT_TYPE_GUEST) {
+            shutdown(pClient->m_clientSock, SHUT_RDWR);
+            close(pClient->m_clientSock);
+
+            m_clientList.Delete(pClient->m_clientSock);
+
+            delete pClient;
+            pClient = NULL;
+        }
+    }
+}
+
+void AsyncMediaServerSocket::DeleteClient(ClientObject* pClient) {
+    printf("============== DELETE CLIENT ==============\n");
+    m_clientList.Delete(pClient->m_clientSock);
+
+    printf("============== DELETE CLIENT IN ==============\n");
+    delete pClient;
+    pClient = NULL;
+    printf("============== DELETE CLIENT OUT ==============\n");
 }

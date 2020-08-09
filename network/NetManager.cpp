@@ -9,6 +9,10 @@
 
 using namespace cv;
 
+static const BYTE VIDEO_FPS_STATUS_NO_CHANGE = 0;   // FPS 상태가 기존과 동일
+static const BYTE VIDEO_FPS_STATUS_SUCCESS = 1;     // FPS 가 BASE FPS 보다 크거나 같은 경우
+static const BYTE VIDEO_FPS_STATUS_FAILURE = 2;     // FPS 가 BASE FPS 보다 작은 경우
+
 static NetManager *pNetMgr = NULL;
 
 static bool is_RectReady[MAXCHCNT];
@@ -56,9 +60,15 @@ NetManager::NetManager() {
     for(int i = 0; i < MAXCHCNT; i++) {
         m_isOnService[i] = false;
         
+        m_isReceivedRecordStartCommand[i] = false;
         m_nRecordStartCommandCountReceived[i] = 0;
         m_nRecordStopCommandCountReceived[i] = 0;
+        m_nRecordCompletionCountSent[i] = 0;
+        
         m_nCaptureCommandReceivedCount[i] = 0;
+        m_nCaptureCompletionCountSent[i] = 0;
+
+        m_iMirrorVideoInputCount[i] = 0;
 
         m_iCaptureCount[i] = 0;
         m_iCaptureCountOld[i] = 0;
@@ -68,6 +78,8 @@ NetManager::NetManager() {
         m_iSendCountOld[i] = 0;
 
         m_iRefreshCH[i] = 1;
+
+        m_isToSkipFailureReport[i] = false;
 
         m_isJpgCapture[i] = false;
         m_nJpgCaptureStartTime[i] = 0;
@@ -84,7 +96,9 @@ NetManager::NetManager() {
         gs_lastScene[i].create(960, 960, CV_8UC3);
     }
 
-    memset(m_strAviSavePath, 0x00, sizeof(m_strAviSavePath));
+    memset( m_strAviSavePath, 0x00, sizeof(m_strAviSavePath) );
+
+    memset( m_byOldVideoFpsStatus, 0x00, sizeof(m_byOldVideoFpsStatus) );
 
     pNetMgr = this;
 
@@ -123,6 +137,9 @@ bool NetManager::BypassPacket(void* pMirroringPacket) {
 
     // capture count 업데이트
     m_iCaptureCount[nHpNo - 1]++;
+
+    // 장애처리를 위한 mirroring count 업데이트
+    m_iMirrorVideoInputCount[nHpNo - 1]++;
 
     if(usCmd == CMD_MIRRORING_CAPTURE_FAILED) {
         return SendToClient(usCmd, nHpNo, pPacket, CMD_HEAD_SIZE + iDataLen + CMD_TAIL_SIZE, 0);
@@ -173,6 +190,8 @@ void NetManager::OnMirrorStopped(int nHpNo, int nStopCode) {
 }
 
 bool NetManager::OnReadEx(ClientObject* pClient, char* pRcvData, int len) {
+    if(pClient == NULL) return false;
+    
 //    printf("NetManager::OnReadEx Socket(%d) ----> %d\n", pClient->m_clientSock, len);
     if(pRcvData[0] == CMD_START_CODE && pClient->m_rcvCommandBuffer[0] != CMD_START_CODE) {
         memcpy(pClient->m_rcvCommandBuffer, pRcvData, len);
@@ -204,8 +223,15 @@ bool NetManager::OnReadEx(ClientObject* pClient, char* pRcvData, int len) {
         // 패킷이 완성될때까지 반복
         if(bPacketOK == false) return false;
 
+        Socket sock = pClient->m_clientSock;
+
         WebCommandDataParsing2(pClient, pClient->m_rcvCommandBuffer, totDataLen);
 
+        if( m_VPSSvr.Find(sock) == NULL ) {
+            // WebCommandDataParsing2 처리에서 close socket이 처리된 경우 해당 객체가 삭제된다.
+            return false;
+        }
+        
         pClient->m_rcvCommandBuffer[0] = 0; // 처리 완료 플래그
 
         // 처리 후, 남은 패킷을 맨앞으로 당겨준다.
@@ -232,11 +258,15 @@ bool NetManager::IsOnService(int nHpNo) {
 void NetManager::ClientConnected(ClientObject* pClient) {
     m_VPSSvr.UpdateClientList(pClient);
 
+    m_isToSkipFailureReport[pClient->m_nHpNo - 1] = true;
+
     const char* strClientType = pClient->GetClientTypeString();
     printf("[VPS:%d] %s is connected.\n", pClient->m_nHpNo, strClientType);
 }
 
 void NetManager::ClientDisconnected(ClientObject* pClient) {
+    m_isToSkipFailureReport[pClient->m_nHpNo - 1] = false;
+
     const char* strClientType = pClient->GetClientTypeString();
     printf("[VPS:%d] %s is disconnected.\n", pClient->m_nHpNo, strClientType);
 }
@@ -328,6 +358,8 @@ bool NetManager::JPGCaptureAndSend(int nHpNo, BYTE* pJpgData, int iJpgDataLen) {
         int totLen = 0;
         BYTE* pSendData = MakeSendData2(CMD_CAPTURE_COMPLETED, nHpNo, (int)strlen(fileName), (BYTE*)fileName, (BYTE*)gs_pBufSendDataToClient[MAXCHCNT], totLen);
         if( SendToMobileController(pSendData, totLen) ) {
+            m_nCaptureCompletionCountSent[nHpNo - 1]++;
+
             printf("[VPS:%d] [Capture] 단말기 화면 캡쳐 응답보냄: 성공(%s)\n", nHpNo, fileName);
             m_isJpgCapture[nHpNo - 1] = false;
             m_nJpgCaptureStartTime[nHpNo - 1] = 0;
@@ -350,6 +382,8 @@ bool NetManager::JPGCaptureFailSend(int nHpNo) {
     int totLen = 0;
     BYTE* pSendData = MakeSendData2(CMD_CAPTURE_COMPLETED, nHpNo, (int)strlen(fileName), (BYTE*)fileName, (BYTE*)gs_pBufSendDataToClient[MAXCHCNT], totLen);
     if( SendToMobileController(pSendData, totLen) ) {
+        m_nCaptureCompletionCountSent[nHpNo - 1]++;
+
         printf("[VPS:%d] [Capture] 단말기 화면 캡쳐 응답보냄: 실패(%s)\n", nHpNo, fileName);
         return true;
     }
@@ -373,6 +407,8 @@ bool NetManager::RecordStopAndSend(int nHpNo) {
     int totLen = 0;
     BYTE* pSendData = MakeSendData2(CMD_CAPTURE_COMPLETED, nHpNo, (int)strlen(gs_recordFileName[nHpNo - 1]), (BYTE*)gs_recordFileName[nHpNo - 1], (BYTE*)gs_pBufSendDataToClient[MAXCHCNT], totLen);
     if( SendToMobileController(pSendData, totLen) ) {
+        m_nRecordCompletionCountSent[nHpNo - 1]++;
+
         printf("[VPS:%d] [Record] 단말기 녹화 정지 응답보냄: 성공(%s)\n", nHpNo, gs_recordFileName[nHpNo - 1]);
         return true;
     } else {
@@ -393,6 +429,10 @@ bool NetManager::RecordStopSend(int nHpNo) {
     }
 
     return false;
+}
+
+bool NetManager::SendLastRecordStopResponse(int nHpNo) {
+    return RecordStopAndSend(nHpNo);
 }
 
 void NetManager::Record(int nHpNo, bool start) {
@@ -421,18 +461,19 @@ void NetManager::Record(int nHpNo, bool start) {
         m_isRunRecord[nHpNo - 1] = true;
         m_nRecStartTime[nHpNo - 1] = GetTickCount();
 
-        m_mirror.SendKeyFrame(nHpNo);
-
-        m_nRecordStartCommandCountReceived[nHpNo - 1]++;
+        m_mirror.SendKeyFrame(nHpNo);        
     } else {
+        if(!m_isRunRecord[nHpNo - 1] && m_isReceivedRecordStartCommand[nHpNo - 1]) {
+            // 이미 레코드 종료된 상태이므로 마지막 file name을 DC로 보내준다.
+            SendLastRecordStopResponse(nHpNo);
+        }
+
         m_isRunRecord[nHpNo - 1] = false;
         m_nRecStartTime[nHpNo - 1] = 0;
 
         // gs_writer[nHpNo - 1].release();
         
         gs_recorder[nHpNo - 1]->StopRecord();
-
-        m_nRecordStopCommandCountReceived[nHpNo - 1]++;
     }
 }
 
@@ -546,8 +587,146 @@ bool NetManager::HeartbeatSendToDC() {
     return SendToMobileController(pSendData, totLen);
 }
 
-bool NetManager::CloseClient(ClientObject* pClient) {
-    return m_VPSSvr.OnClose(pClient->m_clientSock);
+bool NetManager::VideoFpsCheckAndSend(void* pData) {
+    if(m_VPSSvr.GetMobileController() == NULL) return false;
+
+    const int BASE_MIRRORING_VIDEO_COUNT_PER_10SEC = 1;
+
+    short* pFpsData = (short*)pData;
+    int nConnectedHostCount = 0;
+
+    // 연결이 끊긴 노드는 0으로 초기화
+    for(int i = 0; i < MAXCHCNT; i++) {
+        if( m_VPSSvr.FindHost(i + 1) == NULL ) {
+            m_byOldVideoFpsStatus[i] = VIDEO_FPS_STATUS_NO_CHANGE;
+        } else {
+            nConnectedHostCount++;
+        }
+    }
+
+    // 연결된 Host가 없으면 FPS를 보낼 의미가 없음
+    if(nConnectedHostCount == 0) return false;
+
+    // 실제 DC로 전송하는 데이터는 FPS 값이 아닌 VPSDEO_FPS_STATUS 값이므로
+    // FPS 값을 체크해서 새로 보낼 VIDEO_FPS_STATUS 데이터를 만든다.
+    bool hasStatusChanged = false;
+    BYTE byNewFpsStatus[MAXCHCNT] = {0,};
+
+    for(int i = 0; i < MAXCHCNT; i++) {
+        // 연결되어 있는 Host에 대해서만 체크
+        if( m_VPSSvr.FindHost(i + 1) == NULL ) {
+
+        }
+    }
+
+    int totLen = 0;
+    BYTE* pSendData = MakeSendData2(CMD_MONITOR_VIDEO_FPS_STATUS, 0, 0, NULL, (BYTE*)gs_pBufSendDataToClient[MAXCHCNT], totLen);
+    return SendToMobileController(pSendData, totLen);
+}
+
+void NetManager::CleanupClient(int nHpNo) {
+    m_mirror.StopMirroring(nHpNo);
+}
+
+bool NetManager::ClosingClient(ClientObject* pClient) {
+    if(pClient->m_nClientType == CLIENT_TYPE_HOST) {
+        // Guest에 CMD_DISCONNECT_GUEST 보냄
+        int nHpNo = pClient->m_nHpNo;
+        ClientObject** pClientList = m_VPSSvr.GetClientList(nHpNo);
+
+        for(int i = 0; i < MAXCLIENT_PER_CH; i++) {
+            ClientObject* pGuest = pClientList[i];
+            if(pGuest != NULL
+                && pGuest->m_nClientType == CLIENT_TYPE_GUEST) {
+                pGuest->m_isExitCommandReceived = true;
+                int totLen = 0;
+                BYTE* pSendData = MakeSendData2(CMD_DISCONNECT_GUEST, nHpNo, strlen(pGuest->m_strID), (BYTE*)pGuest->m_strID, gs_pBufSendDataToClient[nHpNo - 1], totLen);
+                Send(pSendData, totLen, pGuest, false);
+            }
+        }
+    } else if(pClient->m_nClientType == CLIENT_TYPE_MONITOR) {
+        // CMD_MIRRORING_STOPPED 보냄
+        int totLen = 0;
+        BYTE* pSendData = MakeSendData2(CMD_MIRRORING_STOPPED, pClient->m_nHpNo, 0, NULL, (BYTE*)gs_pBufSendDataToClient[MAXCHCNT], totLen);
+        if( SendToMobileController(pSendData, totLen, true) ) {
+            printf("[VPS:%d] DC로 모니터 연결 해제 패킷(22002) 보냄\n", pClient->m_nHpNo);
+        } else {
+            printf("[VPS:%d] DC로 모니터 연결 해제 패킷(22002) 보냄 실패\n", pClient->m_nHpNo);
+        }
+    }
+
+    ClientDisconnected(pClient);
+
+    return true;
+}
+
+void NetManager::StopVideoServiceIfNoClientExist() {
+    // Host 등의 클라이언트는 이미 종료했는데, CMD_START(1) 패킷이 나중에 들어오면,
+    // Mirroring 서비스가 종료되지 않는 경우가 발생하여,
+    // 해당 채널에 연결된 클라이언트가 하나도 없을 경우 Mirroring 서비스를 종료하는 코드 추가
+    bool doesClientExist[MAXCHCNT] = {0,};
+    
+    for(int i = 0; i < MAXCHCNT; i++) {
+        ClientObject** pClientList = m_VPSSvr.GetClientList(i + 1);
+
+        for(int j = 0; j < MAXCLIENT_PER_CH; j++) {
+            ClientObject* pClient = pClientList[j];
+            if(pClient != NULL
+                && !doesClientExist[i] 
+                && pClient->m_clientSock != INVALID_SOCKET) {
+                doesClientExist[i] = true;
+            }
+        }
+
+        if( !doesClientExist[i] && !IsOnService(i + 1) ) {
+            m_mirror.StopMirroring(i + 1);
+        }
+    }
+}
+
+bool NetManager::CloseClientManualEx(int nHpNo) {
+    // 이 함수의 인자가 nHpNo 하나밖에 없으므로,
+    // nHpNo 값만 보고 무조건 클라이언트 연결을 종료하면,
+    // 클라이언트 리스트 상 가장 먼저 있는 클라이언트를 종료하게 된다.
+    // 그래서 Host만으로 제한한다.
+    // DC에서는 Host가 종료할때 CMD_STOP(2) 패킷을 보내기 때문이다.
+    // 그리고 Host는 VPS에 하나만 연결될 수 있도록 되어 있다.
+    ClientObject* pHost = m_VPSSvr.FindHost(nHpNo);
+    if(pHost != NULL) {
+        CloseClientManual(pHost);
+    }
+
+    StopVideoServiceIfNoClientExist();
+
+    // CMD_STOP(2)에 대한 처리 중 하나로, Host가 아닌, 채널 종료에 대한 메시지 처리함
+    // TestAutomation에서는 Host가 연결되지 않기 때문에 ClosingClient가 아닌 여기로 옮김
+    int nRcvd1 = m_nCaptureCommandReceivedCount[nHpNo - 1];
+    int nSent = m_nCaptureCompletionCountSent[nHpNo - 1];
+
+    printf("[VPS:%d] [Capture:Summary] 캡쳐 요청=%d번, 캡쳐 응답=%d번 (%s)\n", 
+                nHpNo, nRcvd1, nSent, (nRcvd1 == nSent) ? "Succeeded" : "Failed");
+
+    nRcvd1 = m_nRecordStartCommandCountReceived[nHpNo - 1];
+    int nRcvd2 = m_nRecordStopCommandCountReceived[nHpNo - 1];
+    nSent = m_nRecordCompletionCountSent[nHpNo - 1];
+
+    printf("[VPS:%d] [Record:Summary] 녹화 시작 요청=%d번, 녹화 정지 요청=%d번, 녹화 정지 응답=%d번 (%s)\n", 
+                nHpNo, nRcvd1, nRcvd2, nSent, (nRcvd1 == nRcvd2 && nRcvd2 == nSent) ? "Succeeded" : "Failed");
+
+    m_nCaptureCommandReceivedCount[nHpNo - 1] = 0;
+    m_nCaptureCompletionCountSent[nHpNo - 1] = 0;
+
+    m_nRecordStartCommandCountReceived[nHpNo - 1] = 0;
+    m_nRecordStopCommandCountReceived[nHpNo - 1] = 0;
+    m_nRecordCompletionCountSent[nHpNo - 1] = 0;
+
+    return true;
+}
+
+void NetManager::CloseClientManual(ClientObject* pClient) {
+    printf("======> CLOSE CLIENT MANUAL CALL ONCLOSE ..... 1\n");
+    m_VPSSvr.OnClose(pClient->m_clientSock);
+    printf("======> CLOSE CLIENT MANUAL CALL ONCLOSE ..... 2\n");
 }
 
 bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, int len) {
@@ -656,8 +835,8 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
 
             int nClientType = pClient->m_nClientType;
 
-            CloseClient(pClient);   // ClientObject 객체 삭제됨
-
+            CloseClientManual(pClient);
+            printf("[VPS:%d] Received PLAYER EXIT   2\n", nHpNo);
             if(nClientType == CLIENT_TYPE_GUEST) {
                 ClientObject* pHost = m_VPSSvr.FindHost(nHpNo);
                 if(pHost != NULL) {
@@ -666,6 +845,7 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
                     Send(pSendData, totLen, pHost, false);
                 }
             }
+            printf("[VPS:%d] Received PLAYER EXIT   3\n", nHpNo);
         }
         break;
 
@@ -677,6 +857,7 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
             if(pGuest != NULL) {
                 if( !Send((BYTE*)pRcvData, len, pGuest, false) ) {
                     // Guest에 DISCONNECT 전송 실패 시 강제 종료 시킴
+                    printf("======> WEB DATA PARSING CMD_DISCONNECT_GUEST CALL ONCLOSE .....\n");
                     m_VPSSvr.OnClose(pGuest->m_clientSock);
                 }
             }
@@ -728,12 +909,41 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
         break;
 
         case CMD_STOP: {
-            m_isOnService[nHpNo - 1] = false;
+            bool doesHostExist = m_VPSSvr.FindHost(nHpNo) == NULL ? false : true;
+            bool force = true;
+
+            if(doesHostExist) {
+                force = false;
+            }
 
             printf("[VPS:%d] Stop Command 명령 받음 : 채널 서비스 종료 처리 수행\n", nHpNo);
 
-            // test code
-            m_mirror.StopMirroring(nHpNo);
+            // 캡쳐 중/녹화 중이면, VPS가 DC로 응답하기 전
+            // VPS_CAPTURE_RESPONSE_WAITING_TIME 만큼 기다린다.
+            if(m_isJpgCapture[nHpNo - 1] || m_isRunRecord[nHpNo -1]) {
+                ULONGLONG nTimeout = VPS_CAPTURE_RESPONSE_WAITING_TIME;
+                nTimeout += GetTickCount();
+                while( (m_isJpgCapture[nHpNo - 1] || m_isRunRecord[nHpNo - 1])
+                    && GetTickCount() < nTimeout ) {
+                    usleep(1);
+                }
+
+                m_isJpgCapture[nHpNo - 1] = false;
+                Record(nHpNo, false);
+            }
+
+            // force가 true이면 CloseClientManualEx 호출
+            if(force) {
+                CloseClientManualEx(nHpNo);
+            }
+
+            if(force) {
+                m_isOnService[nHpNo - 1] = false;
+            }
+
+            // isOnService가 변한 시점인 여기에서
+            // 한번 더 호출 해준다.
+            StopVideoServiceIfNoClientExist();
         }
         break;
 
@@ -753,13 +963,25 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
         }
         break;
 
+        case 1010:
         case CMD_RECORD: {
             bool start = pData[0] == 1 ? true : false;
+
+            if(start) {
+                m_nRecordStartCommandCountReceived[nHpNo - 1]++;
+            } else {
+                m_nRecordStopCommandCountReceived[nHpNo - 1]++;
+            }
 
             printf("[VPS:%d] [Record] 단말기 녹화 %s 명령 받음\n", nHpNo, start ? "시작" : "정지");
 
             // 녹화 명령 처리
             Record(nHpNo, start);
+
+            // DC로부터 Recording Start/Stop 명령을 짝으로 받았는지 체크
+            // VPS에서 30분이 지난 다음 Stop 명령이 나중에 날아왔을 때에도
+            // 정상적인 응답을 주기 위해 사용함
+            m_isReceivedRecordStartCommand[nHpNo - 1] = start;
         }
         break;
 
@@ -819,7 +1041,13 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
         break;
 
         case CMD_CAPTURE_COMPLETED: {
-            RecordStopAndSend(nHpNo);
+            if(m_isReceivedRecordStartCommand[nHpNo - 1]) {
+                // VPS 자체적으로 종료한 경우(33분) DC로 알리지 않는다.
+                // 추후 Recording Stop을 DC로 부터 받으면 그때 알려준다.
+                // file name을 저장해 둔다. : gs_recordFileName[nHpNo - 1]
+            } else {
+                RecordStopAndSend(nHpNo);
+            }
         }
         break;
 
@@ -845,7 +1073,7 @@ void NetManager::UpdateState(int id) {
                 m_iSendCount[i] = 0;
 
                 if(m_isOnService[i]) {
-                    printf("[VPS:%d] FPS 캡쳐: %d, 압축: %d, 전송: %d\n", (i + 1), m_iCaptureCountOld[i], m_iCompressedCountOld[i], m_iSendCountOld[i]);
+//                    printf("[VPS:%d] FPS 캡쳐: %d, 압축: %d, 전송: %d\n", (i + 1), m_iCaptureCountOld[i], m_iCompressedCountOld[i], m_iSendCountOld[i]);
                 }
 
                 if(m_isJpgCapture[i]
@@ -861,11 +1089,11 @@ void NetManager::UpdateState(int id) {
             // Record 예외 처리
             for(int i = 0; i < MAXCHCNT; i++) {
                 if(m_isRunRecord[i]) {
-                    static const int RECORDING_TIME = 30 * 60 * 1000;
+                    static const int RECORDING_TIME = 3 * 60 * 1000;
                     ULONGLONG nElapsedTime = GetTickCount() - m_nRecStartTime[i];
 
                     // 처음에는 30초 더 기다렸으나, 자동화툴에서는 부족하여 충분하게 3분으로 늘림(33분)
-                    if( nElapsedTime >= (RECORDING_TIME + (3 * 60 * 1000)) ) {
+                    if( nElapsedTime >= (RECORDING_TIME + (1 * 60 * 1000)) ) {
                         // 클라이언트로 녹화 중지 명령을 보낸 후,
                         // 3분(33분 - 30분)동안 녹화 중지 명령이 안오면, VPS 자체적으로 녹화 중지함
                         // 자동화 시에는 녹화 중지 명령을 받을 클라이언트가 없으므로, 33분에 녹화 중지됨
@@ -885,7 +1113,27 @@ void NetManager::UpdateState(int id) {
         break;
 
         case TIMERID_20SEC: {
+            // 클라이언트가 연결될 때마다 처음 한번은 장애처리 메시지를 보내지 않는다.
+            // 장애처리 패킷에는 모든 채널의 장애 정보가 들어있으므로
+            // Client 하나라도 연결이 들어오면, 처음 한번은 장애처리 패킷을 보내지 않는다.
+            bool isToSkipFailureReport = false;
+            for(int i = 0; i < MAXCHCNT; i++) {
+                if(m_isToSkipFailureReport[i]) {
+                    m_isToSkipFailureReport[i] = false;
+                    isToSkipFailureReport = true;
+                }
+            }
 
+            if(isToSkipFailureReport) break;
+
+            short nFpsData[MAXCHCNT] = {0,};
+            for(int i = 0; i < MAXCHCNT; i++) {
+                nFpsData[i] = m_iMirrorVideoInputCount[i];
+                m_iMirrorVideoInputCount[i] = 0;
+            }
+
+            // 무조건 FPS 값을 보내는 것이 아니라, 보낼지 체크하고 보냄.
+//            VideoFpsCheckAndSend(nFpsData);
         }
         break;
     }

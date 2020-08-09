@@ -50,6 +50,8 @@ void ClientList::Delete(Socket sock) {
 }
 
 ClientObject* ClientList::FindHost(int nHpNo) {
+    if(nHpNo < 1) return NULL;
+
     ClientObject** clientList = m_clientList[nHpNo - 1];
     for(int i = 0; i < MAXCLIENT_PER_CH; i++) {
         ClientObject* pClient = clientList[i];
@@ -64,6 +66,8 @@ ClientObject* ClientList::FindHost(int nHpNo) {
 }
 
 ClientObject* ClientList::FindGuest(int nHpNo, char* id) {
+    if(nHpNo < 1) return NULL;
+
     ClientObject** clientList = m_clientList[nHpNo - 1];
     for(int i = 0; i < MAXCLIENT_PER_CH; i++) {
         ClientObject* pClient = clientList[i];
@@ -71,6 +75,22 @@ ClientObject* ClientList::FindGuest(int nHpNo, char* id) {
 
         if(pClient->m_nClientType == CLIENT_TYPE_GUEST 
             && strcmp(pClient->m_strID, id) == 0) {
+            return pClient;
+        }
+    }
+
+    return NULL;
+}
+
+ClientObject* ClientList::FindMonitor(int nHpNo) {
+    if(nHpNo < 1) return NULL;
+    
+    ClientObject** clientList = m_clientList[nHpNo - 1];
+    for(int i = 0; i < MAXCLIENT_PER_CH; i++) {
+        ClientObject* pClient = clientList[i];
+        if(pClient == NULL) continue;
+
+        if(pClient->m_nClientType == CLIENT_TYPE_MONITOR) {
             return pClient;
         }
     }

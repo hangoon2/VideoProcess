@@ -24,12 +24,16 @@ ClientObject::ClientObject() {
 }
 
 ClientObject::~ClientObject() {
-    printf("[VPS:%d] Socket %d closed\n", m_nHpNo, m_clientSock);
-    close(m_clientSock);
+    Lock();
+
+    // printf("[VPS:%d] Socket %d closed\n", m_nHpNo, m_clientSock);
+    // close(m_clientSock);
 
     m_clientSock = INVALID_SOCKET;
     
     delete [] m_rcvCommandBuffer;
+
+    Unlock();
 }
 
 void ClientObject::Lock() {
