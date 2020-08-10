@@ -39,6 +39,8 @@ private:
 
     void RecordStopAndSend();
 
+    bool IsCompressTime(double dlCaptureGap);
+
 private:
     bool m_isRunning;
 
@@ -46,6 +48,9 @@ private:
 
     int m_retPort;  // 결과를 전송할 server port
     BYTE m_pBufSendData[SEND_BUF_SIZE];
+
+    double m_dlCaptureGap;
+    double m_dlLastGapTime;
 
 #if ENABLE_SHARED_MEMORY
     void* m_sharedMem;

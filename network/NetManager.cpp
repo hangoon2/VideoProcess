@@ -191,7 +191,7 @@ void NetManager::OnMirrorStopped(int nHpNo, int nStopCode) {
 
 bool NetManager::OnReadEx(ClientObject* pClient, char* pRcvData, int len) {
     if(pClient == NULL) return false;
-    
+
 //    printf("NetManager::OnReadEx Socket(%d) ----> %d\n", pClient->m_clientSock, len);
     if(pRcvData[0] == CMD_START_CODE && pClient->m_rcvCommandBuffer[0] != CMD_START_CODE) {
         memcpy(pClient->m_rcvCommandBuffer, pRcvData, len);
@@ -938,6 +938,7 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
             }
 
             if(force) {
+                printf("[VPS:%d] Stop Command 명령 받음 : FORCE CLOSE SOCKET\n", nHpNo);
                 m_isOnService[nHpNo - 1] = false;
             }
 
@@ -1089,11 +1090,11 @@ void NetManager::UpdateState(int id) {
             // Record 예외 처리
             for(int i = 0; i < MAXCHCNT; i++) {
                 if(m_isRunRecord[i]) {
-                    static const int RECORDING_TIME = 3 * 60 * 1000;
+                    static const int RECORDING_TIME = 30 * 60 * 1000;
                     ULONGLONG nElapsedTime = GetTickCount() - m_nRecStartTime[i];
 
                     // 처음에는 30초 더 기다렸으나, 자동화툴에서는 부족하여 충분하게 3분으로 늘림(33분)
-                    if( nElapsedTime >= (RECORDING_TIME + (1 * 60 * 1000)) ) {
+                    if( nElapsedTime >= (RECORDING_TIME + (3 * 60 * 1000)) ) {
                         // 클라이언트로 녹화 중지 명령을 보낸 후,
                         // 3분(33분 - 30분)동안 녹화 중지 명령이 안오면, VPS 자체적으로 녹화 중지함
                         // 자동화 시에는 녹화 중지 명령을 받을 클라이언트가 없으므로, 33분에 녹화 중지됨

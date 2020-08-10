@@ -40,7 +40,7 @@ void* ThreadFunc(void* pArg) {
     //                Mirroring Socket                  //
     /////////////////////////////////////////////////// */
     pClient->m_mirrorSocket = socket(PF_INET, SOCK_STREAM, 0);
-    if(pClient->m_mirrorSocket == INVALID_SOCKET) {
+    if(pClient->m_mirrorSocket == -1) {
         printf("[VPS:%d] mirroring sock() error[%d]\n", nHpNo, errno);
 
         pClient->CleanUpRunClientThreadData();
@@ -94,7 +94,7 @@ void* ThreadFunc(void* pArg) {
     //                 Control Socket                   //
     /////////////////////////////////////////////////// */
     pClient->m_controlSocket = socket(PF_INET, SOCK_STREAM, 0);
-    if(pClient->m_controlSocket == INVALID_SOCKET) {
+    if(pClient->m_controlSocket == -1) {
         printf("[VPS:%d] control sock() error[%d]\n", nHpNo, errno);
 
         pClient->CleanUpRunClientThreadData();
@@ -237,6 +237,7 @@ bool MIR_Client::StartRunClientThread(int nHpNo, int nMirroringPort, int nContro
             printf("[VPS:%d] Mirroring thread creation fail[%d]\n", nHpNo, errno);
         }
     } else {
+        printf("[VPS:%d] ALREADY MIRRORING THEAD\n", nHpNo);
         // send key frame
         SendKeyFramePacket();
     }

@@ -24,6 +24,9 @@ VideoRecorder::VideoRecorder(void* sharedMem, int nHpNo, int retPort) {
     m_sharedMem = sharedMem;
     m_i64Img_ID = 0;
 #endif
+
+    m_dlCaptureGap = 1000 / 16;
+    m_dlLastGapTime = 0;
 }
 
 VideoRecorder::~VideoRecorder() {
@@ -60,7 +63,7 @@ void VideoRecorder::StopRecord()
 }
 
 bool VideoRecorder::EnQueue(unsigned char* pImgData) {
-    if( IsThreadRunning() ) {
+    if( IsThreadRunning() && IsCompressTime(m_dlCaptureGap) ) {
         m_inCount++;
 
         unsigned long time = GetTickCount();
@@ -257,8 +260,8 @@ bool VideoRecorder::OpenEncoder(char* filePath) {
     codec_ctx->codec_id = fmt->video_codec;
     codec_ctx->codec_type = AVMEDIA_TYPE_VIDEO;
     codec_ctx->pix_fmt = AV_PIX_FMT_YUV420P;
-    codec_ctx->qmin = 10;
-    codec_ctx->qmax = 51;
+//    codec_ctx->qmin = 10;
+//    codec_ctx->qmax = 51;
     codec_ctx->max_b_frames = 3;
 //    codec_ctx->bit_rate = 180000;
 
@@ -387,4 +390,14 @@ void VideoRecorder::RecordStopAndSend() {
 
     shutdown(sock, SHUT_RDWR);
     close(sock);
+}
+
+bool VideoRecorder::IsCompressTime(double dlCaptureGap) {
+    double msec = GetTickCount();
+    if(msec - m_dlLastGapTime >= dlCaptureGap) {
+        m_dlLastGapTime = msec;
+        return true;
+    }
+
+    return false;
 }
