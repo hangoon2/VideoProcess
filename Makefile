@@ -1,8 +1,8 @@
 CC=g++
 TARGET=vps
 CPPFLAGS=--std=c++11
-GTK_FLAGS=`pkg-config gtkmm-3.0 --cflags`
-GTK_LIBS=`pkg-config gtkmm-3.0 --libs`
+#GTK_FLAGS=`pkg-config gtkmm-3.0 --cflags`
+#GTK_LIBS=`pkg-config gtkmm-3.0 --libs`
 #OPENCV_FLAGS=`pkg-config opencv4 --cflags`
 OPENCV_INC=-I /usr/local/include/opencv4
 
@@ -13,14 +13,14 @@ OBJS=main.o VPS.o NetManager.o AsyncMediaServerSocket.o ClientObject.o ClientLis
 		Timer.o Mutex.o Rec_MemPool.o Rec_Queue.o VideoRecorder.o
 
 $(TARGET): $(OBJS)
-	$(CC) -o $@ $(OBJS) $(LDLIBS) $(GTK_LIBS)
+	$(CC) -o $@ $(OBJS) $(LDLIBS)
 	rm -f *.o
 
 main.o: main.cpp
-	$(CC) -c main.cpp $(CPPFLAGS) $(GTK_FLAGS)
+	$(CC) -c main.cpp $(CPPFLAGS)
 
 VPS.o: VPS.cpp
-	$(CC) -c VPS.cpp $(CPPFLAGS) $(GTK_FLAGS)
+	$(CC) -c VPS.cpp $(CPPFLAGS)
 
 NetManager.o: network/NetManager.cpp
 	$(CC) -c network/NetManager.cpp $(CPPFLAGS) $(OPENCV_INC)

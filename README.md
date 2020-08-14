@@ -28,3 +28,8 @@ cmake -G "Unix Makefiles" ..
 make -j8
 sudo make install
 ```
+
+### 맥 바이너리 의존성 검사
+```shell
+otool -L "바이너리"
+```
