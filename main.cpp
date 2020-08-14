@@ -1,16 +1,31 @@
-#include <stdio.h>
-
 #include "network/NetManager.h"
 
+#include <stdio.h>
 #include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
+#include <pthread.h>
 
 static int shmid = -1;
 static void* shared_memory = (void *)0;
+
+#if ENABLE_UI
+#include "VPS.h"
+
+static VPS* vps = NULL;
+static pthread_t gs_tID = NULL;
+#endif
+
 static NetManager *pNetMgr = NULL;
 
 void ExitProgram() {
+#if ENABLE_UI
+    if(vps != NULL) {
+        delete vps;
+        vps = NULL;
+    }
+#endif
+
     if(pNetMgr != NULL) {
         delete pNetMgr;
         pNetMgr = NULL;
@@ -34,7 +49,19 @@ void SigHandler(int sig) {
     }
 }
 
-int main() {
+void* BackgroundThreadFunc(void* pArg) {
+    pNetMgr = new NetManager(NULL);
+    pNetMgr->OnServerModeStart();
+
+    return NULL;
+}
+
+void threadFunc() {
+    pNetMgr = new NetManager(NULL);
+    pNetMgr->OnServerModeStart();
+}
+
+int main(int argc, char *argv[]) {
     signal(SIGINT, SigHandler);
 
 #if ENABLE_SHARED_MEMORY
@@ -61,8 +88,35 @@ int main() {
     }
 #endif
 
-    pNetMgr = new NetManager();
+#if ENABLE_UI
+//    Glib::thread_init();
+
+    if(!Glib::thread_supported()) {
+        Glib::thread_init();
+    }
+
+    pthread_create(&gs_tID, NULL, &BackgroundThreadFunc, NULL);
+
+    auto app = Gtk::Application::create(argc, argv, "com.onycom.vps");
+
+    // g_type_init();
+
+    // if(!g_thread_supported()) {
+    //     g_thread_init(NULL);
+    // }
+
+    // gdk_threads_init();
+    // gdk_threads_enter();
+
+    vps = new VPS();
+
+//    Glib::Thread::create(sigc::ptr_fun(&threadFunc), true);
+
+    int ret = app->run(*vps);
+#else
+    pNetMgr = new NetManager(NULL);
     pNetMgr->OnServerModeStart();
+#endif
 
     ExitProgram();
 

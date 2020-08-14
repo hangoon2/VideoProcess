@@ -1,13 +1,26 @@
 #include "Mirroring.h"
 #include "VPSJpeg.h"
+#include "MIR_QueueHandler.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 
 static Mirroring* gs_pMirroring = NULL;
 
+static MIR_QueueHandler gs_mirQueHandler[MAXCHCNT];
+
 static int MIRROR_PORT = 8800;
 static int CONTROL_PORT = 8820;
+
+bool MirroringEnQueue(void* pMirroringPacket) {
+    BYTE* pPacket = (BYTE*)pMirroringPacket;
+
+    int nHpNo = *(&pPacket[7]);
+
+    gs_pMirroring->EnQueue(nHpNo, pPacket);
+
+    return true;
+}
 
 bool MirroringCallback(void* pMirroringPacket) {
     BYTE* pPacket = (BYTE*)pMirroringPacket;
@@ -25,7 +38,7 @@ bool MirroringCallback(void* pMirroringPacket) {
         gs_pMirroring->HandleJpegPacket(pPacket, iDataLen, usCmd, nHpNo);
     }
 
-    return false;
+    return true;
 }
 
 void MirrorStoppedCallback(int nHpNo, int nStopCode) {
@@ -43,6 +56,10 @@ Mirroring::Mirroring() {
 
         m_nKeyFrameW[i] = 0;
         m_nKeyFrameH[i] = 0;
+
+#if ENABLE_MIRRORING_QUEUE
+        gs_mirQueHandler[i].StartThread(MirroringCallback);
+#endif
     }
 
     char value[16] = {0,};
@@ -56,7 +73,15 @@ Mirroring::Mirroring() {
 }
 
 Mirroring::~Mirroring() {
+#if ENABLE_MIRRORING_QUEUE
+    for(int i = 0; i < MAXCHCNT; i++) {
+        gs_mirQueHandler[i].StopThread();
+    }
+#endif
+}
 
+void Mirroring::Initialize(PMIRRORING_ROUTINE pRecordRoutine) {
+    m_pRecordingRoutine = pRecordRoutine;
 }
 
 bool Mirroring::StartMirroring(int nHpNo, 
@@ -68,7 +93,11 @@ bool Mirroring::StartMirroring(int nHpNo,
 
     if(m_pMirroringStopRoutine[nHpNo - 1] == NULL) {
         // 쓰래드 시작
+#if ENABLE_MIRRORING_QUEUE
+        if( m_mirClient[nHpNo - 1].StartRunClientThread(nHpNo, nMirrorPort, nControlPort, MirroringEnQueue, MirrorStoppedCallback) ) {
+#else
         if( m_mirClient[nHpNo - 1].StartRunClientThread(nHpNo, nMirrorPort, nControlPort, MirroringCallback, MirrorStoppedCallback) ) {
+#endif
             m_pMirroringRoutine[nHpNo - 1] = pMirroringRoutine;
             m_pMirroringStopRoutine[nHpNo - 1] = pMirroringStopRoutine;
             m_nDeviceOrientation[nHpNo -1] = 1;
@@ -228,6 +257,10 @@ void Mirroring::HandleJpegPacket(BYTE* pPacket, int iDataLen, short usCmd, int n
     if(m_pMirroringRoutine[nHpNo - 1] != NULL) {
         m_pMirroringRoutine[nHpNo - 1](pPacket);
     }
+
+    // if(m_pRecordingRoutine != NULL) {
+    //     m_pRecordingRoutine(pPacket);
+    // }
 }
 
 void Mirroring::HandleJpegCaptureFailedPacket(BYTE* pPacket, int nHpNo) {
@@ -253,6 +286,14 @@ void Mirroring::SendControlPacket(int nHpNo, BYTE* pData, int len) {
     short usCmd = ntohs( *(short*)&pData[5] );
     if(usCmd == CMD_PLAYER_QUALITY) {
         m_nJpgQuality[nHpNo - 1] = ntohs( *(short*)&pData[8] );
+
+        if(m_nJpgQuality[nHpNo - 1] < 1) {
+            m_nJpgQuality[nHpNo - 1] = 1;
+            *(short*)&pData[8] = ntohs(m_nJpgQuality[nHpNo - 1]);
+        } else if(m_nJpgQuality[nHpNo - 1] > 90) {
+            m_nJpgQuality[nHpNo - 1] = 90;
+            *(short*)&pData[8] = ntohs(m_nJpgQuality[nHpNo - 1]);
+        }
     }
 
     m_mirClient[nHpNo - 1].SendToControlSocket((const char*)pData, len);
@@ -261,5 +302,9 @@ void Mirroring::SendControlPacket(int nHpNo, BYTE* pData, int len) {
 void Mirroring::SetDeviceOrientation(int nHpNo, int deviceOrientation) {
     m_nDeviceOrientation[nHpNo - 1] = deviceOrientation;
 
-    printf("[VPS:%d] 영상 %s 모드 출력\n", nHpNo, deviceOrientation == 1 ? "세로" : "가로");
+//    printf("[VPS:%d] 영상 %s 모드 출력\n", nHpNo, deviceOrientation == 1 ? "세로" : "가로");
+}
+
+void Mirroring::EnQueue(int nHpNo, BYTE* pPacket) {
+    gs_mirQueHandler[nHpNo - 1].EnQueue(pPacket);
 }

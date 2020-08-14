@@ -2,8 +2,7 @@
 #define CLIENT_OBJECT_H
 
 #include "../common/VPSCommon.h"
-
-#include <pthread.h>
+#include "../common/Mutex.h"
 
 #define RECV_BUFFER_SIZE        1024 * 1024
 #define DEFAULT_STRING_SIZE     128
@@ -36,13 +35,15 @@ public:
 
     bool m_isFirstImage;
 
+    bool m_isClosing;
+
     void Lock();
     void Unlock();
 
     const char* GetClientTypeString();
 
 private:
-    pthread_mutex_t m_lock;
+    Mutex m_lock;
 };
 
 #endif

@@ -5,10 +5,10 @@
 
 #include <pthread.h>
 
-typedef bool (*PMIRRORING_ROUTINE)(void* pMirroringPacket);
-typedef void (*PMIRRORING_STOP_ROUTINE)(int nHpNo, int nStopCode);
+// typedef bool (*PMIRRORING_ROUTINE)(void* pMirroringPacket);
+// typedef void (*PMIRRORING_STOP_ROUTINE)(int nHpNo, int nStopCode);
 
-#define RECV_BUF_SIZE   (2 * 1024 * 1024)
+#define RECV_BUF_SIZE   (1 * 1024 * 1024)
 
 enum {
     RX_PACKET_POS_START,
@@ -46,6 +46,7 @@ public:
     int SendKeyFramePacket();
 
     bool GetData(int efd, Socket sock, int waitms);
+    int GetData();
 
 private:
     BYTE* MakeOnyPacketKeyFrame(int& size);
@@ -71,11 +72,11 @@ private:
     int m_nMirrorPort;
     int m_nControlPort;
 
-    // int m_nOffset;
-    // int m_nCurrReadSize;
-    // int m_nReadBufSize;
-    // bool m_isHeadOfFrame;
-    // bool m_isFirstImage;
+    int m_nOffset;
+    int m_nCurrReadSize;
+    int m_nReadBufSize;
+    bool m_isHeadOfFrame;
+    bool m_isFirstImage;
 
     BYTE m_sendBuf[SEND_BUF_SIZE];
 

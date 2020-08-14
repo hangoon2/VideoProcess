@@ -4,6 +4,8 @@
 #include "../common/VPSCommon.h"
 #include "Rec_Queue.h"
 
+#include <pthread.h>
+
 extern "C" {
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
@@ -43,6 +45,8 @@ private:
 
 private:
     bool m_isRunning;
+
+    pthread_t m_tID;
 
     int m_nHpNo;
 

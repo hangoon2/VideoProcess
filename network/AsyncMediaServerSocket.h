@@ -12,7 +12,7 @@ public:
 
     int InitSocket(void* pNetMgr, int port);
     bool OnClose(Socket sock);
-    bool OnSend(Socket sock, BYTE* pData, int iLen, bool force);
+    bool OnSend(ClientObject* pClient, BYTE* pData, int iLen, bool force);
 
     ClientObject* Find(Socket sock);
     ClientObject* FindHost(int nHpNo);

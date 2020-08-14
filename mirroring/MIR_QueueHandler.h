@@ -6,17 +6,19 @@
 
 #include <pthread.h>
 
-typedef void (*PROCESS_PACKET_FN)(BYTE* pPacket);
-
 class MIR_QueueHandler {
 public:
     MIR_QueueHandler();
     virtual ~MIR_QueueHandler();
 
-    bool StartThread(PROCESS_PACKET_FN fnProcessPacket);
+    bool StartThread(PMIRRORING_ROUTINE fnProcessPacket);
+    void StopThread();
+
+    void QueueHandling();
+    void EnQueue(BYTE* item);
 
 private:
-    PROCESS_PACKET_FN m_fnProcessPacket;
+    PMIRRORING_ROUTINE m_fnProcessPacket;
 
     MIR_Queue m_mirQue;
 

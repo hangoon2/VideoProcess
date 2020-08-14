@@ -20,7 +20,7 @@ ClientObject::ClientObject() {
 
     m_isFirstImage = true;
 
-    pthread_mutex_init(&m_lock, NULL);
+    m_isClosing = false;
 }
 
 ClientObject::~ClientObject() {
@@ -37,11 +37,11 @@ ClientObject::~ClientObject() {
 }
 
 void ClientObject::Lock() {
-    pthread_mutex_lock(&m_lock);
+    m_lock.Lock();
 }
 
 void ClientObject::Unlock() {
-    pthread_mutex_unlock(&m_lock);
+    m_lock.Unlock();
 }
 
 const char* ClientObject::GetClientTypeString() {

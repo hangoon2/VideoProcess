@@ -11,20 +11,25 @@ MIR_Queue::~MIR_Queue() {
 }
 
 void MIR_Queue::EnQueue(BYTE* item) {
-//    m_mQueueLock.lock();
+    m_mMirQue.Lock();
 
     BYTE* itemClone = CreateQueueItem(item);
-    if(itemClone != nullptr) {
+    if(itemClone != nullptr) { 
+        bool isKeyFrame = *&itemClone[24] == 1 ? true : false;
+        if(isKeyFrame) {
+            ClearQueueInternal();
+        }
+
         m_mirQueue.push_back(itemClone);
     }
 
-//    m_mQueueLock.unlock();
+    m_mMirQue.Unlock();
 }
 
 bool MIR_Queue::DeQueue(BYTE* o_item) {
     bool ret = false;
 
-//    m_mQueueLock.lock();
+    m_mMirQue.Lock();
 
     if(m_mirQueue.size() > 0) {
         mir_que_t::iterator iterBegin = m_mirQueue.begin();
@@ -38,17 +43,17 @@ bool MIR_Queue::DeQueue(BYTE* o_item) {
         ret = true;
     }
 
-//    m_mQueueLock.unlock();
+    m_mMirQue.Unlock();
 
     return ret;
 }
 
 void MIR_Queue::ClearQueue() {
-//    m_mQueueLock.lock();
+    m_mMirQue.Lock();
 
     ClearQueueInternal();
 
-//    m_mQueueLock.unlock();
+    m_mMirQue.Unlock();
 }
 
 void* MIR_Queue::AllocateItemMemory() {

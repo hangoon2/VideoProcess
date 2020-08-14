@@ -84,6 +84,10 @@ void AsyncMediaServerSocket::OnAccept(int efd, ServerSocket serverSock) {
 
     m_clientList.Insert(clientSock, pClient);
 
+    int bufsize = 1024 * 1024;
+    socklen_t len = sizeof(bufsize);
+    setsockopt(clientSock, SOL_SOCKET, SO_SNDBUF, &bufsize, sizeof(bufsize));
+
     printf("[VPS:0] Accept : %s\n", pClient->m_strIPAddr);
 
     //write( clientSock, "connect server", sizeof("connect server") );
@@ -108,12 +112,13 @@ void AsyncMediaServerSocket::OnRead(int efd, Socket sock) {
 }
 
 bool AsyncMediaServerSocket::OnClose(Socket sock) {
-    // close socket
-    shutdown(sock, SHUT_RDWR);
-    close(sock);
-
     ClientObject* pClient = m_clientList.Find(sock);
     if(pClient != NULL) {  
+        pClient->m_isClosing = true;
+
+        // close socket
+        shutdown(sock, SHUT_RDWR);
+        close(sock);
         printf("[VPS:%d] Socket %d closed\n", pClient->m_nHpNo, sock);
 
         int nHpNo = pClient->m_nHpNo;
@@ -130,10 +135,9 @@ bool AsyncMediaServerSocket::OnClose(Socket sock) {
         }
 
         if( pClient == GetMobileController() ) {
-            m_clientList.Delete(sock);
-            
-            delete pClient;
-            pClient = NULL;
+            ((NetManager*)m_pNetMgr)->ClosingClient(pClient);
+
+            DeleteClient(pClient);
             
             return true;
         }
@@ -142,6 +146,8 @@ bool AsyncMediaServerSocket::OnClose(Socket sock) {
             // 비정상적으로 연결 해제된 Client 정보를 저장하되
             // m_SocketClient 변수값은 초기화한다.
             printf("========= 비정상 종료 처리 필요 ==========\n");
+            pClient->m_isClosing = false;
+
             return true;
         }
 
@@ -159,12 +165,12 @@ bool AsyncMediaServerSocket::OnClose(Socket sock) {
 
             ((NetManager*)m_pNetMgr)->ClosingClient(pClient);
 
-            usleep(100);
+//            usleep(100);
             CloseAllGuest(nHpNo);
 
             DeleteClient(pClient);
         } else if(nClientType == CLIENT_TYPE_MONITOR) {
-            // 자동화 테스트 중에는 Monitor 모드의 VD가 닫혀도 Clean Up 처리를 하지 않기 위해
+            // 자동화 테스트 중에는 Monitor 모드의 VD가 닫혀도 Clean Up 처리를 하지 않기 위해 
             // isOnService 체크함
             if(!doesHostExist && !doesMonitorExist && !isOnService) {
                 ((NetManager*)m_pNetMgr)->CleanupClient(nHpNo);
@@ -184,13 +190,48 @@ bool AsyncMediaServerSocket::OnClose(Socket sock) {
     return false;
 }
 
-bool AsyncMediaServerSocket::OnSend(Socket sock, BYTE* pData, int iLen, bool force) {
-    int ret = (int)write(sock, pData, iLen);
-    if(ret != iLen) {
+bool AsyncMediaServerSocket::OnSend(ClientObject* pClient, BYTE* pData, int iLen, bool force) {
+    if(iLen >= 1024 * 1024) {
+        printf("패킷 사이즈 너무 큼\n");
         return false;
     }
 
-    return true;
+    if(pClient->m_isClosing && !force) {
+        printf("[VPS:%d] 소켓 Close 처리 중\n", pClient->m_nHpNo);
+        return false;
+    }
+
+    Socket sock = pClient->m_clientSock;
+
+    int nOffset = 0;
+    int dataSize = iLen;
+
+//    for(int i = 0; i < 5; i++) {
+    while(1) {
+        int nSendResult = send(sock, pData + nOffset, dataSize, 0);
+        if(nSendResult == SOCKET_ERROR) {
+            if(errno == EWOULDBLOCK) {
+                usleep(1);
+                continue;
+            } else {
+                printf("Socket Send() Error : %d\n", errno);
+                return false;
+            }
+        } else {
+            nOffset += nSendResult;
+            dataSize -= nSendResult;
+
+            if(nOffset < iLen) {
+                continue;
+            }
+
+            return true;
+        }
+    }
+
+    printf("[VPS:%d] SEND DATA FAILED : %d / %d\n", pClient->m_nHpNo, nOffset, iLen);
+
+    return false;
 }
 
 void AsyncMediaServerSocket::OnServerEvent(int efd, ServerSocket serverSock, int waitms) {
@@ -300,11 +341,10 @@ void AsyncMediaServerSocket::CloseAllGuest(int nHpNo) {
 }
 
 void AsyncMediaServerSocket::DeleteClient(ClientObject* pClient) {
-    printf("============== DELETE CLIENT ==============\n");
+    int nHpNo = pClient->m_nHpNo;
     m_clientList.Delete(pClient->m_clientSock);
 
-    printf("============== DELETE CLIENT IN ==============\n");
     delete pClient;
     pClient = NULL;
-    printf("============== DELETE CLIENT OUT ==============\n");
+    printf("============== DELETE CLIENT ============== %d\n", nHpNo);
 }

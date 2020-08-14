@@ -5,9 +5,11 @@
 #include "../mirroring/Mirroring.h"
 #include "../common/Timer.h"
 
+typedef void (*PVPS_ADD_LOG_ROUTINE)(int nHpNo, const char* log);
+
 class NetManager {
 public:
-    NetManager();
+    NetManager(PVPS_ADD_LOG_ROUTINE fnAddLog);
     ~NetManager();
 
     void OnServerModeStart();
@@ -25,13 +27,17 @@ public:
     void ClientDisconnected(ClientObject* pClient);
 
     void Record(int nHpNo, bool start);
-    
+
+    bool DoMirrorVideoRecording(int nHpNo, short usCmd, bool isKeyFrame, BYTE* pPacket, int iDataLen);
+
     void CleanupClient(int nHpNo);
     bool ClosingClient(ClientObject* pClient);
 
     void StopVideoServiceIfNoClientExist();
     bool CloseClientManualEx(int nHpNo);
     void CloseClientManual(ClientObject* pClient);
+
+    void AddLog(int nHpNo, const char* log);
 
 private:
     bool SendToMobileController(BYTE* pData, int iLen, bool force = false);
@@ -43,7 +49,7 @@ private:
     bool RecordStopAndSend(int nHpNo);
     bool RecordStopSend(int nHpNo);
     bool SendLastRecordStopResponse(int nHpNo);
-    bool DoMirrorVideoRecording(int nHpNo, short usCmd, bool isKeyFrame, BYTE* pPacket, int iDataLen);
+//    bool DoMirrorVideoRecording(int nHpNo, short usCmd, bool isKeyFrame, BYTE* pPacket, int iDataLen);
 
     bool HeartbeatSendToDC();
     bool VideoFpsCheckAndSend(void* pData);
@@ -52,6 +58,8 @@ private:
 
 private:
     AsyncMediaServerSocket m_VPSSvr;
+
+    PVPS_ADD_LOG_ROUTINE m_fnAddLog;
 
     Mirroring m_mirror;
 

@@ -42,18 +42,13 @@ int VPSJpeg::RotateLeft(BYTE* pJpgSrc, int nJpgSrcLen, int quality) {
 }
 
 int VPSJpeg::RotateRight(BYTE* pJpgSrc, int nJpgSrcLen, int quality) {
-    Mat rawData = Mat(1, nJpgSrcLen, CV_8SC1, (void*)pJpgSrc).clone();
+    Mat rawData(1, nJpgSrcLen, CV_8SC1, (void*)pJpgSrc);
     Mat rawImage = imdecode(rawData, IMREAD_COLOR);
-
+    
     transpose(rawImage, rawImage);
     flip(rawImage, rawImage, 1);
-
-    int ret = Encode(pJpgSrc, rawImage, quality);
-
-    rawData.release();
-    rawImage.release();
-
-    return ret;
+    
+    return Encode(pJpgSrc, rawImage, quality);
 }
 
 bool VPSJpeg::SaveJpeg(char* filePath, BYTE* pJpgSrc, int nJpgSrcLen, int quality) {

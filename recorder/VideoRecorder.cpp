@@ -9,6 +9,13 @@
 
 using namespace std;
 
+void* RecordingThreadFunc(void* pArg) {
+    VideoRecorder* pRecorder = (VideoRecorder*)pArg;
+    pRecorder->OnRecord();
+
+    return NULL;
+}
+
 VideoRecorder::VideoRecorder(void* sharedMem, int nHpNo, int retPort) {
     m_isRunning = false;
 
@@ -50,11 +57,20 @@ void VideoRecorder::StartRecord(char* filePath) {
     ClearVideoMem(m_nHpNo - 1, m_sharedMem, MEM_SHARED_MAX_COUNT);
 #endif
 
-    if(OpenEncoder(filePath)) {
-        thread([=]() {
-            OnRecord();    
-        }).detach();
+    if( OpenEncoder(filePath) ) { 
+        int r = pthread_create(&m_tID, NULL, &RecordingThreadFunc, this);
+
+        if(m_tID != NULL) {
+        } else {
+            printf("[VPS:0] Mirroring thread creation fail[%d]\n", errno);
+        }
     }
+
+    // if(OpenEncoder(filePath)) {
+    //     thread([=]() {
+    //         OnRecord();    
+    //     }).detach();
+    // }
 }
 
 void VideoRecorder::StopRecord()
@@ -64,8 +80,6 @@ void VideoRecorder::StopRecord()
 
 bool VideoRecorder::EnQueue(unsigned char* pImgData) {
     if( IsThreadRunning() && IsCompressTime(m_dlCaptureGap) ) {
-        m_inCount++;
-
         unsigned long time = GetTickCount();
 
         av_image_fill_arrays(m_rgb32->data, m_rgb32->linesize, (uint8_t*)pImgData, AV_PIX_FMT_BGR24, 960, 960, 1);
@@ -73,6 +87,8 @@ bool VideoRecorder::EnQueue(unsigned char* pImgData) {
 #if ENABLE_SHARED_MEMORY
         HDCAP* pInCap = (HDCAP*)GetFreeInVideoMem(m_nHpNo - 1, m_sharedMem, MEM_SHARED_MAX_COUNT);
         if(pInCap != NULL) {
+            m_inCount++;
+
             pInCap->ui64ID = IncreamentImageId();
             pInCap->msec = time;
 
@@ -82,6 +98,8 @@ bool VideoRecorder::EnQueue(unsigned char* pImgData) {
             pInCap->accessMode = TYPE_ACCESS_DATA;  // 데이터 있음
         }
 #else
+        m_inCount++;
+
         m_recFrame.msec = time;
 
         av_image_fill_arrays(m_yuv420p->data, m_yuv420p->linesize, (uint8_t*)m_recFrame.btImg, AV_PIX_FMT_YUV420P, 960, 960, 1);
@@ -146,7 +164,7 @@ void VideoRecorder::OnRecord() {
     memset(pFrame, 0, sizeof(HDCAP));
 
     // encoding loop
-    while(IsThreadRunning()) {
+    while( IsThreadRunning() ) {
 #if ENABLE_SHARED_MEMORY
         HDCAP* pInCap = (HDCAP*)GetDataInVideoMem(m_nHpNo - 1, m_sharedMem, MEM_SHARED_MAX_COUNT);
         if(pInCap != NULL) {
@@ -162,6 +180,8 @@ void VideoRecorder::OnRecord() {
             m_outCount++;
 
             av_image_fill_arrays(frame->data, frame->linesize, (uint8_t*)pFrame->btImg, AV_PIX_FMT_YUV420P, 960, 960, 1);
+
+            usleep(1);
 
             int frameOfGap = 0;
             if(nb_frames > 0) {
@@ -187,17 +207,24 @@ void VideoRecorder::OnRecord() {
 
             av_packet_rescale_ts(&pkt, codec_ctx->time_base, m_stream->time_base);
 
+            usleep(1);
+
             // write packet
             ret = av_write_frame(m_outctx, &pkt);
             if(ret >= 0) {
                 ++nb_frames;
             }
 
+            usleep(1);
+
             av_packet_unref(&pkt);
         }
 
         this_thread::sleep_for( chrono::milliseconds(1) );
+//        usleep(500);
     }
+
+    printf("RECORDING END : %lld, %lld\n", m_inCount, m_outCount);
 
     if(pFrame != NULL) {
         free(pFrame);
@@ -257,13 +284,14 @@ bool VideoRecorder::OpenEncoder(char* filePath) {
     codec_ctx->time_base.num = 1;
     codec_ctx->time_base.den = 16;
     codec_ctx->global_quality = 4;
+    codec_ctx->gop_size = 30;
     codec_ctx->codec_id = fmt->video_codec;
     codec_ctx->codec_type = AVMEDIA_TYPE_VIDEO;
     codec_ctx->pix_fmt = AV_PIX_FMT_YUV420P;
-//    codec_ctx->qmin = 10;
-//    codec_ctx->qmax = 51;
+    codec_ctx->qmin = 10;
+    codec_ctx->qmax = 51;
     codec_ctx->max_b_frames = 3;
-//    codec_ctx->bit_rate = 180000;
+    codec_ctx->bit_rate = 540000;
 
     if(m_outctx->oformat->flags & AVFMT_GLOBALHEADER)
         codec_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;

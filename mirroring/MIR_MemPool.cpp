@@ -15,13 +15,23 @@ MIR_MemPool::MIR_MemPool() {
 }
 
 MIR_MemPool::~MIR_MemPool() {
+    m_mMemPool.Lock();
 
+    if(m_pMemPool) {
+        free(m_pMemPool);
+    }
+
+    m_mMemPool.Unlock();
+}
+
+int MIR_MemPool::Size() {
+    return m_nAllocedCount;
 }
 
 void* MIR_MemPool::Alloc() {
-    void* ret = nullptr;
+    void* ret = NULL;
 
-//    m_mRecMemLock.lock();
+    m_mMemPool.Lock();
 
     // 미리 할당된 메모리가 사용 전이면, 미리 할당된 메모리를 사용하고,
     // 그렇지 않으면, 새로운 메모리를 할당
@@ -40,17 +50,17 @@ void* MIR_MemPool::Alloc() {
         ret = malloc(MIR_DEFAULT_MEM_POOL_UINT);
     }
 
-//    m_mRecMemLock.unlock();
+    m_mMemPool.Unlock();
 
     return ret;
 }
 
 void MIR_MemPool::Free(void *pMem) {
-    if(pMem == nullptr) {
+    if(pMem == NULL) {
         return;
     }
 
-//    m_mRecMemLock.lock();
+    m_mMemPool.Lock();
 
     bool isFreed = false;
 
@@ -70,5 +80,5 @@ void MIR_MemPool::Free(void *pMem) {
         free(pMem);
     }
 
-//    m_mRecMemLock.unlock();
+    m_mMemPool.Unlock();
 }

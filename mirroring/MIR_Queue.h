@@ -2,6 +2,7 @@
 #define MIR_QUEUE_H
 
 #include "MIR_MemPool.h"
+#include "../common/Mutex.h"
 
 #include <deque>
 
@@ -29,7 +30,7 @@ private:
     mir_que_t m_mirQueue;
     MIR_MemPool m_memPool;
 
-//    QMutex m_mQueueLock;
+    Mutex m_mMirQue;
 };
 
 #endif

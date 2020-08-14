@@ -73,7 +73,7 @@ void* ThreadFunc(void* pArg) {
     memset( &servAddr, 0x00, sizeof(servAddr) );
     servAddr.sin_family = AF_INET;
     servAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
-    servAddr.sin_port = htons( pClient->GetMirrorPort() );
+    servAddr.sin_port = htons(nMirrorPort);
 
     if( connect( pClient->m_mirrorSocket, (sockaddr*)&servAddr, sizeof(servAddr) ) != 0 ) {
         printf("[VPS:%d] mirroring connect() error[%d]\n", nHpNo, errno);
@@ -122,7 +122,7 @@ void* ThreadFunc(void* pArg) {
     memset( &servAddr, 0x00, sizeof(servAddr) );
     servAddr.sin_family = AF_INET;
     servAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
-    servAddr.sin_port = htons( pClient->GetControlPort() );
+    servAddr.sin_port = htons(nControlPort);
 
     if( connect( pClient->m_controlSocket, (sockaddr*)&servAddr, sizeof(servAddr) ) != 0 ) {
         printf("[VPS:%d] control socket connect() error[%d]\n", nHpNo, errno);
@@ -142,6 +142,7 @@ void* ThreadFunc(void* pArg) {
     pClient->SetRunClientThreadReady(true);
     pClient->SetDoExitRunClientThread(false);
 
+#if ENABLE_NONBLOCK_SOCKET
     int epollfd = kqueue();
     if(epollfd >= 0) {
         SetNonBlock(pClient->m_mirrorSocket);
@@ -169,6 +170,24 @@ void* ThreadFunc(void* pArg) {
         free(pClient->m_pRcvBuf);
         pClient->m_pRcvBuf = NULL;
     }
+#else
+    // memory alloc : read buffer
+        pClient->m_pRcvBuf = (BYTE*)malloc(RECV_BUF_SIZE);
+
+        int i = 0;
+        while( !pClient->IsDoExitRunClientThread() ) {
+            int ret = pClient->GetData();
+            if(ret == -1 || ret == 0) {
+                pClient->SetDoExitRunClientThread(true);
+
+                printf("[VPS:%d] Mirroring socket is disconnected.\n", nHpNo);
+                break;
+            }
+        }
+
+        free(pClient->m_pRcvBuf);
+        pClient->m_pRcvBuf = NULL;
+#endif
 
     pClient->SetRunClientThreadReady(false);
     printf("[VPS:%d] Mirroring service stopped\n", nHpNo);
@@ -204,6 +223,12 @@ MIR_Client::MIR_Client() {
     m_pos = 0;
     m_rxStreamOrder = RX_PACKET_POS_START;
     m_dataSize = 0;
+
+    m_nOffset = 0;
+    m_nCurrReadSize = 0;
+    m_nReadBufSize = 0;
+    m_isHeadOfFrame = true;
+    m_isFirstImage = true;
 }
 
 MIR_Client::~MIR_Client() {
@@ -289,18 +314,18 @@ void MIR_Client::CleanUpRunClientThreadData() {
     if(m_tID != NULL) {
         SetDoExitRunClientThread(false);
 
-        if(m_mirrorSocket != INVALID_SOCKET) {
+        if(m_mirrorSocket != -1) {
             printf("[VPS:%d] Mirroring Socket closed\n", m_nHpNo);
             shutdown(m_mirrorSocket, SHUT_RDWR);
             close(m_mirrorSocket);
-            m_mirrorSocket = INVALID_SOCKET;
+            m_mirrorSocket = -1;
         }
 
-        if(m_controlSocket != INVALID_SOCKET) {
+        if(m_controlSocket != -1) {
             printf("[VPS:%d] Control Socket closed\n", m_nHpNo);
             shutdown(m_controlSocket, SHUT_RDWR);
             close(m_controlSocket);
-            m_controlSocket = INVALID_SOCKET;
+            m_controlSocket = -1;
         }
 
         m_tID = NULL;
@@ -508,7 +533,8 @@ bool MIR_Client::GetData(int efd, Socket sock, int waitms) {
                             m_rxStreamOrder = RX_PACKET_POS_START;
 
                             if(m_pMirroringRoutine != NULL) {
-                                m_pMirroringRoutine((void*)m_pRcvBuf);
+                                printf("READ DATA \n");
+                                m_pMirroringRoutine( (void*)m_pRcvBuf );
                             }
                         }
                     }
@@ -524,4 +550,59 @@ bool MIR_Client::GetData(int efd, Socket sock, int waitms) {
     }
 
     return false;
+}
+
+int MIR_Client::GetData() {
+    int r = -2;
+
+    if(m_isHeadOfFrame) {
+        r = m_nCurrReadSize = recv(m_mirrorSocket, m_pRcvBuf + m_nOffset, 4, 0);
+        if(m_nCurrReadSize == -1) {
+            printf("[VPS:%d] Read Error : %d\n", m_nHpNo, m_nOffset);
+            return r;
+        } else if(m_nCurrReadSize == 0) {
+            printf("[VPS:%d] Read Error : Gracefully closed.\n", m_nHpNo);
+            return r;
+        } 
+
+        m_nOffset = m_nOffset + m_nCurrReadSize;
+
+        if(m_nOffset >= CMD_HEAD_SIZE) {
+            int dataSize = ntohl(*((__int32_t*)(m_pRcvBuf + 1)));
+            m_nReadBufSize = dataSize - (m_nOffset - CMD_HEAD_SIZE) + CMD_TAIL_SIZE;
+            m_isHeadOfFrame = false;
+        }
+    } else {
+        // 헤더에서 계산된 data size 만큼
+        r = m_nCurrReadSize = recv(m_mirrorSocket, m_pRcvBuf + m_nOffset, m_nReadBufSize, 0);
+        if(m_nCurrReadSize <= 0) {
+            return r;
+        }
+
+        m_nReadBufSize = m_nReadBufSize - m_nCurrReadSize;
+        m_nOffset = m_nOffset + m_nCurrReadSize;
+        if(m_nReadBufSize == 0) {
+            m_nOffset = 0;
+
+            int dataSize = ntohl(*((__int32_t*)(m_pRcvBuf + 1)));
+            int iPacketLen = CMD_HEAD_SIZE + dataSize + CMD_TAIL_SIZE;
+            if(RECV_BUF_SIZE < iPacketLen) {
+                printf("[VPS:%d] Read Error : Too many data\n", m_nHpNo);
+                return -4;
+            }
+
+            if(((BYTE*)m_pRcvBuf)[iPacketLen - 1] != CMD_END_CODE) {
+                printf("[VPS:%d] Read Error : Invalid packet\n", m_nHpNo);
+                return -3;
+            }
+
+            if(m_pMirroringRoutine != NULL) {
+                m_pMirroringRoutine( (void*)m_pRcvBuf );
+            }
+
+            m_isHeadOfFrame = true;
+        }
+    }
+
+    return m_nCurrReadSize;
 }

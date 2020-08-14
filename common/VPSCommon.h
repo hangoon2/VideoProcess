@@ -6,9 +6,13 @@
 #define MAXCHCNT            10
 #define MAXCLIENT_PER_CH    21  // Host(1) + Guest(20) = 21
 
+#define ENABLE_UI               0
 #define ENABLE_SHARED_MEMORY    1
+#define ENABLE_MIRRORING_QUEUE  1
+#define ENABLE_NONBLOCK_SOCKET  0
 
 #define INVALID_SOCKET 0L
+#define SOCKET_ERROR    (-1)
 
 #define CMD_START_CODE  0x7F
 #define CMD_END_CODE    0xEF
@@ -31,7 +35,10 @@ typedef long                INT64;
 #define TIMERID_10SEC               10 * 1000
 #define TIMERID_20SEC               20 * 1000
 
+#define RECORDING_TIME              (30 * 60 * 1000)
+
 #define VPS_DEFAULT_JPG_QUALITY     70
+#define VPS_CAPTURE_JPG_QUALITY     90
 
 #define FULLHD_IMAGE_SIZE           1382400     //(960 * 960 * 4)
 
@@ -154,6 +161,9 @@ struct SYSTEM_TIME {
     int second;
     int millisecond;
 };
+
+typedef bool (*PMIRRORING_ROUTINE)(void* pMirroringPacket);
+typedef void (*PMIRRORING_STOP_ROUTINE)(int nHpNo, int nStopCode);
 
 /*//////////////////////////////////////////////
 //               Common Function              //
