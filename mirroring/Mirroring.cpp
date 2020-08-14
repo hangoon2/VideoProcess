@@ -8,6 +8,7 @@
 static Mirroring* gs_pMirroring = NULL;
 
 static MIR_QueueHandler gs_mirQueHandler[MAXCHCNT];
+static VPSJpeg gs_mirJpeg[MAXCHCNT];
 
 static int MIRROR_PORT = 8800;
 static int CONTROL_PORT = 8820;
@@ -156,9 +157,9 @@ void Mirroring::HandleJpegPacket(BYTE* pPacket, int iDataLen, short usCmd, int n
         int nJpgDataSize = iDataLen - 17;
 
         if(usCmd == CMD_JPG_DEV_VERT_IMG_VERT || usCmd == CMD_JPG_DEV_VERT_IMG_HORI) {
-            VPSJpeg vpsJpeg;
+//            VPSJpeg vpsJpeg;
 
-            int nNewJpgDataSize = vpsJpeg.RotateRight(pJpgData, nJpgDataSize, m_nJpgQuality[nHpNo - 1]);
+            int nNewJpgDataSize = gs_mirJpeg[nHpNo - 1].RotateRight( pJpgData, nJpgDataSize, m_nJpgQuality[nHpNo - 1], (nRight - nLeft), (nBottom - nTop) );
             if(nNewJpgDataSize > 0) {
                 *(short*)&pPacket[16] = htons(nShorterKeyFrameLength - nBottom);
                 *(short*)&pPacket[18] = htons(nLeft);
@@ -204,9 +205,9 @@ void Mirroring::HandleJpegPacket(BYTE* pPacket, int iDataLen, short usCmd, int n
         int nJpgDataSize = iDataLen - 17;
 
         if( (usCmd == CMD_JPG_DEV_HORI_IMG_HORI || usCmd == CMD_JPG_DEV_HORI_IMG_VERT) && !isWideDevice ) {
-            VPSJpeg vpsJpeg;
+//            VPSJpeg vpsJpeg;
 
-            int nNewJpgDataSize = vpsJpeg.RotateLeft(pJpgData, nJpgDataSize, m_nJpgQuality[nHpNo - 1]);
+            int nNewJpgDataSize = gs_mirJpeg[nHpNo - 1].RotateLeft( pJpgData, nJpgDataSize, m_nJpgQuality[nHpNo - 1], (nRight - nLeft), (nBottom - nTop) );
             if(nNewJpgDataSize > 0) {
                 *(short*)&pPacket[16] = htons(nTop);
                 *(short*)&pPacket[18] = htons(nShorterKeyFrameLength - nRight);
@@ -220,9 +221,9 @@ void Mirroring::HandleJpegPacket(BYTE* pPacket, int iDataLen, short usCmd, int n
                 *&pPacket[CMD_HEAD_SIZE + iDataLen + CMD_TAIL_SIZE - 1] = CMD_END_CODE;
             }
         } else if( usCmd == CMD_JPG_DEV_VERT_IMG_VERT && isWideDevice ) {
-            VPSJpeg vpsJpeg;
+//            VPSJpeg vpsJpeg;
 
-            int nNewJpgDataSize = vpsJpeg.RotateLeft(pJpgData, nJpgDataSize, m_nJpgQuality[nHpNo - 1]);
+            int nNewJpgDataSize = gs_mirJpeg[nHpNo - 1].RotateLeft( pJpgData, nJpgDataSize, m_nJpgQuality[nHpNo - 1], (nRight - nLeft), (nBottom - nTop) );
             if(nNewJpgDataSize > 0) {
                 *(short*)&pPacket[16] = htons(nTop);
                 *(short*)&pPacket[18] = htons(nLongerKeyFrameLength - nRight);
@@ -236,9 +237,9 @@ void Mirroring::HandleJpegPacket(BYTE* pPacket, int iDataLen, short usCmd, int n
                 *&pPacket[CMD_HEAD_SIZE + iDataLen + CMD_TAIL_SIZE - 1] = CMD_END_CODE;
             }
         } else if( usCmd == CMD_JPG_DEV_VERT_IMG_HORI && isWideDevice ) {
-            VPSJpeg vpsJpeg;
+//            VPSJpeg vpsJpeg;
 
-            int nNewJpgDataSize = vpsJpeg.RotateRight(pJpgData, nJpgDataSize, m_nJpgQuality[nHpNo - 1]);
+            int nNewJpgDataSize = gs_mirJpeg[nHpNo - 1].RotateRight( pJpgData, nJpgDataSize, m_nJpgQuality[nHpNo - 1], (nRight - nLeft), (nBottom - nTop) );
             if(nNewJpgDataSize > 0) {
                 *(short*)&pPacket[16] = htons(nShorterKeyFrameLength - nBottom);
                 *(short*)&pPacket[18] = htons(nLeft);

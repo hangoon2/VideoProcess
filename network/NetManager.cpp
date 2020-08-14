@@ -21,6 +21,7 @@ static int gs_nLogerKeyFrameLength[MAXCHCNT];
 static int gs_nShorterKeyFrameLength[MAXCHCNT];
 
 static VideoRecorder* gs_recorder[MAXCHCNT];
+static VPSJpeg gs_mirJpeg[MAXCHCNT];
 
 static char gs_recordFileName[MAXCHCNT][DEFAULT_STRING_SIZE] = {0,};
 
@@ -555,8 +556,8 @@ bool NetManager::DoMirrorVideoRecording(int nHpNo, short usCmd, bool isKeyFrame,
     Rect rect;
 
     if(usCmd == CMD_JPG_DEV_VERT_IMG_HORI) {
-        VPSJpeg vpsJpeg;
-        int nNewJpgDataSize = vpsJpeg.RotateLeft(pJpgSrc, nJpgSrcLen, quality);
+//        VPSJpeg vpsJpeg;
+        int nNewJpgDataSize = gs_mirJpeg[nHpNo - 1].RotateLeft( pJpgSrc, nJpgSrcLen, quality, (nRight - nLeft), (nBottom - nTop) );
         if(nNewJpgDataSize > 0) {
             nJpgSrcLen = nNewJpgDataSize;
             usCmd = CMD_JPG_DEV_HORI_IMG_HORI;
@@ -568,8 +569,8 @@ bool NetManager::DoMirrorVideoRecording(int nHpNo, short usCmd, bool isKeyFrame,
             nBottom = gs_nShorterKeyFrameLength[nHpNo - 1] - nTempLeft;
         }
     } else if(usCmd == CMD_JPG_DEV_HORI_IMG_VERT) {
-        VPSJpeg vpsJpeg;
-        int nNewJpgDataSize = vpsJpeg.RotateRight(pJpgSrc, nJpgSrcLen, quality);
+//        VPSJpeg vpsJpeg;
+        int nNewJpgDataSize = gs_mirJpeg[nHpNo - 1].RotateRight( pJpgSrc, nJpgSrcLen, quality, (nRight - nLeft), (nBottom - nTop) );
         if(nNewJpgDataSize > 0) {
             nJpgSrcLen = nNewJpgDataSize;
             usCmd = CMD_JPG_DEV_VERT_IMG_VERT;

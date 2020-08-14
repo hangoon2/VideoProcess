@@ -4,9 +4,9 @@ CPPFLAGS=--std=c++11
 #GTK_FLAGS=`pkg-config gtkmm-3.0 --cflags`
 #GTK_LIBS=`pkg-config gtkmm-3.0 --libs`
 #OPENCV_FLAGS=`pkg-config opencv4 --cflags`
-OPENCV_INC=-I /usr/local/include/opencv4
+OPENCV_INC=-I /usr/local/include/opencv4 -I /usr/local/opt/jpeg-turbo/include
 
-LDLIBS=-L /usr/local/lib -lopencv_core -lopencv_imgcodecs -lopencv_imgproc -lopencv_videoio -lpthread -lavformat -lavcodec -lavutil -lswscale
+LDLIBS=-L /usr/local/lib -lopencv_core -lopencv_imgcodecs -lopencv_imgproc -lopencv_videoio -lpthread -lavformat -lavcodec -lavutil -lswscale -L /usr/local/opt/jpeg-turbo/lib -lturbojpeg
 
 OBJS=main.o VPS.o NetManager.o AsyncMediaServerSocket.o ClientObject.o ClientList.o Mirroring.o \
 		MIR_Client.o MIR_MemPool.o MIR_Queue.o MIR_QueueHandler.o VPSJpeg.o VPSCommon.o \
