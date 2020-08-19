@@ -12,7 +12,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-#define exit_if(r, ...) if(r) {printf(__VA_ARGS__); printf("\nerror no: %d error msg %s\n", errno, strerror(errno)); exit(1);}
+//#define exit_if(r, ...) if(r) {printf(__VA_ARGS__); printf("\nerror no: %d error msg %s\n", errno, strerror(errno)); exit(1);}
 
 const int kReadEvent = 1;
 const int kWriteEvent = 2;
@@ -21,10 +21,14 @@ AsyncMediaServerSocket::AsyncMediaServerSocket() {
     m_serverSock = INVALID_SOCKET;
 
     m_pNetMgr = NULL;
+
+    m_isRunServer = true;
 }
 
 AsyncMediaServerSocket::~AsyncMediaServerSocket() {
     m_clientList.Clear();
+
+    m_isRunServer = false;
 
     if(m_serverSock != INVALID_SOCKET) {
         printf("[VPS:0] Closed Listening Server\n");
@@ -35,10 +39,16 @@ AsyncMediaServerSocket::~AsyncMediaServerSocket() {
 
 void AsyncMediaServerSocket::SetNonBlock(Socket sock) {
     int flags = fcntl(sock, F_GETFL, 0);
-    exit_if(flags < 0, "fcntl failed");
+    if(flags < 0) {
+        printf("[VPS:0] fcntl failed\n");
+        return;
+    }
 
     int r = fcntl(sock, F_SETFL, flags | O_NONBLOCK);
-    exit_if(r < 0, "fcntl failed");
+    if(r < 0) {
+        printf("[VPS:0] fcntl failed\n");
+        return;
+    }
 }
 
 void AsyncMediaServerSocket::UpdateEvents(int efd, Socket sock, int events, bool modify) {
@@ -58,8 +68,7 @@ void AsyncMediaServerSocket::UpdateEvents(int efd, Socket sock, int events, bool
     // }
 
 //    printf("%s Socket %d events read %d\n", modify ? "mod" : "add", sock, events & kReadEvent);
-    int r = kevent(efd, ev, n, NULL, 0, NULL);
-    exit_if(r, "kevent failed");
+    kevent(efd, ev, n, NULL, 0, NULL);
 }
 
 void AsyncMediaServerSocket::OnAccept(int efd, ServerSocket serverSock) {
@@ -67,13 +76,19 @@ void AsyncMediaServerSocket::OnAccept(int efd, ServerSocket serverSock) {
     memset( &raddr, 0x00, sizeof(raddr) );
     socklen_t rsz = sizeof(raddr);
     Socket clientSock = accept(serverSock, (struct sockaddr *)&raddr, &rsz);
-    exit_if(clientSock < 0, "accept failed");
+    if(clientSock < 0) {
+        printf("[VPS:0] accept failed ==> error no: %d error msg %s\n", errno, strerror(errno));
+        return;
+    }
 
     struct sockaddr_in peer;
     memset( &peer, 0x00, sizeof(peer) );
     socklen_t alen = sizeof(peer);
     int r = getpeername(clientSock, (sockaddr *)&peer,  &alen);
-    exit_if(r < 0, "getpeername failed");
+    if(r < 0) {
+        printf("[VPS:0] getpeername failed ==> error no: %d error msg %s\n", errno, strerror(errno));
+        return;
+    }
 
     SetNonBlock(clientSock);
     UpdateEvents(efd, clientSock, kReadEvent, false);
@@ -88,9 +103,10 @@ void AsyncMediaServerSocket::OnAccept(int efd, ServerSocket serverSock) {
     socklen_t len = sizeof(bufsize);
     setsockopt(clientSock, SOL_SOCKET, SO_SNDBUF, &bufsize, sizeof(bufsize));
 
-    printf("[VPS:0] Accept : %s\n", pClient->m_strIPAddr);
-
-    //write( clientSock, "connect server", sizeof("connect server") );
+//    printf("[VPS:0] Accept : %s\n", pClient->m_strIPAddr);
+    char log[128] = {0,};
+    sprintf(log, "Accept : %s", pClient->m_strIPAddr);
+    ((NetManager*)m_pNetMgr)->AddLog(0, log, LOG_TO_FILE); 
 }
 
 void AsyncMediaServerSocket::OnRead(int efd, Socket sock) {
@@ -119,7 +135,11 @@ bool AsyncMediaServerSocket::OnClose(Socket sock) {
         // close socket
         shutdown(sock, SHUT_RDWR);
         close(sock);
-        printf("[VPS:%d] Socket %d closed\n", pClient->m_nHpNo, sock);
+//        printf("[VPS:%d] Socket %d closed\n", pClient->m_nHpNo, sock);
+
+        char log[128] = {0,};
+        sprintf(log, "Socket Closed : %d", sock);
+        ((NetManager*)m_pNetMgr)->AddLog(pClient->m_nHpNo, log, LOG_TO_FILE); 
 
         int nHpNo = pClient->m_nHpNo;
         int nClientType = pClient->m_nClientType;
@@ -241,7 +261,6 @@ void AsyncMediaServerSocket::OnServerEvent(int efd, ServerSocket serverSock, int
     const int kMaxEvents = 20;
     struct kevent activeEvs[kMaxEvents];
     int n = kevent(efd, NULL, 0, activeEvs, kMaxEvents, &timeout);
-//    printf("epoll_wait return %d\n", n);
 
     for(int i = 0; i < n; i++) {
         Socket clientSock = (int)(intptr_t)activeEvs[i].udata;
@@ -256,7 +275,7 @@ void AsyncMediaServerSocket::OnServerEvent(int efd, ServerSocket serverSock, int
         } else if(events == EVFILT_WRITE) {
 
         } else {
-            exit_if(1, "unknown event");
+            printf("[VPS:0] unknown event\n");
         }
     }
 }
@@ -265,10 +284,16 @@ int AsyncMediaServerSocket::InitSocket(void* pNetMgr, int port) {
     m_pNetMgr = pNetMgr;
 
     int epollfd = kqueue();
-    exit_if(epollfd < 0, "epoll_create failed");
+    if(epollfd < 0) {
+        printf("[VPS:0] epoll create failed\n");
+        return 0;
+    }
 
     m_serverSock = socket(AF_INET, SOCK_STREAM, 0);
-    exit_if(m_serverSock < 0, "socket failed");
+    if(m_serverSock < 0) {
+        printf("[VPS:0] server socket failed\n");
+        return 0;
+    }
 
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof addr);
@@ -277,19 +302,31 @@ int AsyncMediaServerSocket::InitSocket(void* pNetMgr, int port) {
     addr.sin_addr.s_addr = INADDR_ANY;
 
     int r = ::bind(m_serverSock, (struct sockaddr *)&addr, sizeof(struct sockaddr));
-    exit_if(r, "bind to 0.0.0.0:%d failed %d %s", port, errno, strerror(errno));
+    if(r) {
+        printf("[VPS:0] bind to 0.0.0.0:%d failed %d %s", port, errno, strerror(errno));
+        return 0;
+    } 
 
     r = listen(m_serverSock, 20);
-    exit_if(r, "listen failed %d %s", errno, strerror(errno));
+    if(r) {
+        printf("[VPS:0] listen failed %d %s", errno, strerror(errno));
+        return 0;
+    }
 
-    printf("[VPS:0] VPS Server listening at %d\n", port);
+//    printf("[VPS:0] VPS Server listening at %d\n", port);
+
+    char log[128] = {0,};
+    sprintf(log, "VPS Server listening : %d", port);
+    ((NetManager*)m_pNetMgr)->AddLog(0, log, LOG_TO_FILE); 
 
     SetNonBlock(m_serverSock);
     UpdateEvents(epollfd, m_serverSock, kReadEvent, false);
 
-    for(;;) {
+    while(m_isRunServer) {
         OnServerEvent(epollfd, m_serverSock, 10000);
     }
+
+    printf("========= CLOSE SERVER SOCKET ==========\n");
 
     return 0;
 }

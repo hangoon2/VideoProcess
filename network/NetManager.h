@@ -5,8 +5,6 @@
 #include "../mirroring/Mirroring.h"
 #include "../common/Timer.h"
 
-typedef void (*PVPS_ADD_LOG_ROUTINE)(int nHpNo, const char* log);
-
 class NetManager {
 public:
     NetManager(PVPS_ADD_LOG_ROUTINE fnAddLog);
@@ -25,6 +23,8 @@ public:
 
     void ClientConnected(ClientObject* pClient);
     void ClientDisconnected(ClientObject* pClient);
+    
+    void DeviceRotate(int nHpNo, bool portrait);
 
     void Record(int nHpNo, bool start);
 
@@ -37,7 +37,7 @@ public:
     bool CloseClientManualEx(int nHpNo);
     void CloseClientManual(ClientObject* pClient);
 
-    void AddLog(int nHpNo, const char* log);
+    void AddLog(int nHpNo, const char* log, vps_log_target_t nTarget);
 
 private:
     bool SendToMobileController(BYTE* pData, int iLen, bool force = false);

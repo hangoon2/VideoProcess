@@ -64,6 +64,12 @@ bool DoMirrorRecordCallback(void* pMirroringPacket) {
     return false;
 }
 
+void DoAddLog(int nHpNo, const char* log, vps_log_target_t nTarget) {
+    if(pNetMgr != NULL) {
+        pNetMgr->AddLog(nHpNo, log, nTarget);
+    }
+}
+
 NetManager::NetManager(PVPS_ADD_LOG_ROUTINE fnAddLog) {
     m_fnAddLog = fnAddLog;
 
@@ -124,7 +130,7 @@ NetManager::NetManager(PVPS_ADD_LOG_ROUTINE fnAddLog) {
     m_timer_1.Start(TIMERID_10SEC, OnTimer);
     m_timer_20.Start(TIMERID_20SEC, OnTimer);
 
-    m_mirror.Initialize(DoMirrorRecordCallback);
+    m_mirror.Initialize(DoMirrorRecordCallback, DoAddLog);
 }
 
 NetManager::~NetManager() {
@@ -191,8 +197,6 @@ bool NetManager::BypassPacket(void* pMirroringPacket) {
 }
 
 void NetManager::OnMirrorStopped(int nHpNo, int nStopCode) {
-    printf("[VPS:%d] OnMirrorStopped : %d\n", nHpNo, nStopCode);
-
     if( IsOnService(nHpNo) ) {
         m_isOnService[nHpNo - 1] = false;
 
@@ -208,7 +212,12 @@ void NetManager::OnMirrorStopped(int nHpNo, int nStopCode) {
         SendToMobileController(pSendData, totLen);
 
 //        printf("[VPS:%d] The socket is abnormally closed.\n", nHpNo);
-        AddLog(nHpNo, "The socket is abnormally closed.");
+        AddLog(nHpNo, "The socket is abnormally closed.", LOG_TO_BOTH);
+    } else {
+//        printf("[VPS:%d] OnMirrorStopped : %d\n", nHpNo, nStopCode);
+        char log[128] = {0,};
+        sprintf(log, "OnMirrorStopped : %d", nStopCode);
+        AddLog(nHpNo, log, LOG_TO_FILE);
     }
 }
 
@@ -286,9 +295,9 @@ void NetManager::ClientConnected(ClientObject* pClient) {
     // const char* strClientType = pClient->GetClientTypeString();
     // printf("[VPS:%d] %s is connected.\n", pClient->m_nHpNo, strClientType);
 
-    char log[512] = {0,};
+    char log[128] = {0,};
     sprintf(log, "%s is connected.", pClient->GetClientTypeString());
-    AddLog(pClient->m_nHpNo, log);    
+    AddLog(pClient->m_nHpNo, log, LOG_TO_BOTH);    
 }
 
 void NetManager::ClientDisconnected(ClientObject* pClient) {
@@ -297,9 +306,22 @@ void NetManager::ClientDisconnected(ClientObject* pClient) {
     // const char* strClientType = pClient->GetClientTypeString();
     // printf("[VPS:%d] %s is disconnected.\n", pClient->m_nHpNo, strClientType);
 
-    char log[512] = {0,};
+    char log[128] = {0,};
     sprintf(log, "%s is disconnected.", pClient->GetClientTypeString());
-    AddLog(pClient->m_nHpNo, log);  
+    AddLog(pClient->m_nHpNo, log, LOG_TO_BOTH);  
+}
+
+void NetManager::DeviceRotate(int nHpNo, bool portrait) {
+    m_mirror.SendKeyFrame(nHpNo);
+
+    m_iRefreshCH[nHpNo - 1] = 1;    // 전체 영상 전송
+    m_mirror.SetDeviceOrientation(nHpNo, portrait ? 1 : 0);
+
+    if(portrait) {
+        AddLog(nHpNo, "영상 세로 모드 출력", LOG_TO_BOTH);  
+    } else {
+        AddLog(nHpNo, "영상 가로 모드 출력", LOG_TO_BOTH);  
+    }
 }
 
 bool NetManager::SendToMobileController(BYTE* pData, int iLen, bool force) {
@@ -393,9 +415,9 @@ bool NetManager::JPGCaptureAndSend(int nHpNo, BYTE* pJpgData, int iJpgDataLen) {
 
 //            printf("[VPS:%d] [Capture] 단말기 화면 캡쳐 응답보냄: 성공(%s)\n", nHpNo, fileName);
 
-            char log[512] = {0,};
+            char log[128] = {0,};
             sprintf(log, "[Capture] 단말기 화면 캡쳐 응답보냄: 성공(%s)", fileName);
-            AddLog(nHpNo, log);    
+            AddLog(nHpNo, log, LOG_TO_BOTH);    
 
             m_isJpgCapture[nHpNo - 1] = false;
             m_nJpgCaptureStartTime[nHpNo - 1] = 0;
@@ -403,9 +425,9 @@ bool NetManager::JPGCaptureAndSend(int nHpNo, BYTE* pJpgData, int iJpgDataLen) {
         } else {
 //            printf("[VPS:%d] [Capture] 단말기 화면 캡쳐 응답보냄: 실패(%s)\n", nHpNo, fileName);
 
-            char log[512] = {0,};
+            char log[128] = {0,};
             sprintf(log, "[Capture] 단말기 화면 캡쳐 응답보냄: 실패(%s)", fileName);
-            AddLog(nHpNo, log);    
+            AddLog(nHpNo, log, LOG_TO_BOTH);    
         }
     }
 
@@ -425,10 +447,9 @@ bool NetManager::JPGCaptureFailSend(int nHpNo) {
         m_nCaptureCompletionCountSent[nHpNo - 1]++;
 
 //        printf("[VPS:%d] [Capture] 단말기 화면 캡쳐 응답보냄: 실패(%s)\n", nHpNo, fileName);
-
-        char log[512] = {0,};
+        char log[128] = {0,};
         sprintf(log, "[Capture] 단말기 화면 캡쳐 응답보냄: 실패(%s)", fileName);
-        AddLog(nHpNo, log);    
+        AddLog(nHpNo, log, LOG_TO_BOTH);    
 
         return true;
     }
@@ -456,17 +477,17 @@ bool NetManager::RecordStopAndSend(int nHpNo) {
 
 //        printf("[VPS:%d] [Record] 단말기 녹화 정지 응답보냄: 성공(%s)\n", nHpNo, gs_recordFileName[nHpNo - 1]);
 
-        char log[512] = {0,};
+        char log[128] = {0,};
         sprintf(log, "[Capture] 단말기 녹화 정지 응답보냄: 성공(%s)", gs_recordFileName[nHpNo - 1]);
-        AddLog(nHpNo, log);    
+        AddLog(nHpNo, log, LOG_TO_BOTH);    
 
         return true;
     } else {
 //        printf("[VPS:%d] [Record] 단말기 녹화 정지 응답보냄: 실패(%s)\n", nHpNo, gs_recordFileName[nHpNo - 1]);
 
-        char log[512] = {0,};
+        char log[128] = {0,};
         sprintf(log, "[Capture] 단말기 녹화 정지 응답보냄: 실패(%s)", gs_recordFileName[nHpNo - 1]);
-        AddLog(nHpNo, log);   
+        AddLog(nHpNo, log, LOG_TO_BOTH);   
     }
 
     return false;
@@ -490,6 +511,11 @@ bool NetManager::SendLastRecordStopResponse(int nHpNo) {
 }
 
 void NetManager::Record(int nHpNo, bool start) {
+//    printf("[VPS:%d] [Record] 단말기 녹화 %s 명령 받음\n", nHpNo, start ? "시작" : "정지");
+    char log[128] = {0,};
+    sprintf(log, "[Record] 단말기 녹화 %s 명령 받음", start ? "시작" : "정지");
+    AddLog(nHpNo, log, LOG_TO_BOTH);  
+
     if(start) {
         char filePath[512] = {0,};
     
@@ -671,9 +697,9 @@ bool NetManager::VideoFpsCheckAndSend(void* pData) {
     for(int i = 0; i < MAXCHCNT; i++) {
         // 연결되어 있는 Host에 대해서만 체크
         if( m_VPSSvr.FindHost(i + 1) != NULL ) {
-            byNewFpsStatus[i] = BASE_MIRRORING_VIDEO_COUNT_PER_10SEC > pFpsData[1] ? VIDEO_FPS_STATUS_FAILURE : VIDEO_FPS_STATUS_SUCCESS;
+            byNewFpsStatus[i] = BASE_MIRRORING_VIDEO_COUNT_PER_10SEC > pFpsData[i] ? VIDEO_FPS_STATUS_FAILURE : VIDEO_FPS_STATUS_SUCCESS;
 
-            printf("[VPS:%d] Device FPS : %d\n", (i + 1), pFpsData[i]);
+//            printf("[VPS:%d] Device FPS : %d, %d\n", (i + 1), m_byOldVideoFpsStatus[i], byNewFpsStatus[i]);
 
             // 기존에 보냈을 때와 상황이 다르면(기존에는 에러였는데, 지금은 정상이면(그 역도 마찬가지))
             // 하나라도 상태가 달라지면, hasStatusChanged 를 true로 설정
@@ -686,9 +712,22 @@ bool NetManager::VideoFpsCheckAndSend(void* pData) {
     // 정상/에러 상태의 변경이 없으면 안보내도 됨
     if(!hasStatusChanged) return false;
 
-    // int totLen = 0;
-    // BYTE* pSendData = MakeSendData2(CMD_MONITOR_VIDEO_FPS_STATUS, 0, 0, NULL, (BYTE*)gs_pBufSendDataToClient[MAXCHCNT], totLen);
-    // return SendToMobileController(pSendData, totLen);
+    int totLen = 0;
+    BYTE* pSendData = MakeSendData2(CMD_MONITOR_VIDEO_FPS_STATUS, 0, MAXCHCNT, byNewFpsStatus, (BYTE*)gs_pBufSendDataToClient[MAXCHCNT], totLen);
+    if( SendToMobileController(pSendData, totLen) ) {
+        char log[128] = {0,};
+        sprintf(log, "%d: 영상 전송 상태(", CMD_MONITOR_VIDEO_FPS_STATUS);
+        for(int i = 0; i < MAXCHCNT; i++) {
+            m_byOldVideoFpsStatus[i] = byNewFpsStatus[i];
+            if(i != MAXCHCNT - 1) {
+                sprintf(log, "%s%d, ", log, byNewFpsStatus[i]);
+            } else {
+                sprintf(log, "%s%d) 보냄", log, byNewFpsStatus[i]);
+            }
+        }
+        
+        AddLog(0, log, LOG_TO_BOTH);   
+    }
 
     return true;
 }
@@ -720,11 +759,11 @@ bool NetManager::ClosingClient(ClientObject* pClient) {
         if( SendToMobileController(pSendData, totLen, true) ) {
 //            printf("[VPS:%d] DC로 모니터 연결 해제 패킷(22002) 보냄\n", pClient->m_nHpNo);
 
-            AddLog(pClient->m_nHpNo, "DC로 모니터 연결 해제 패킷(22002) 보냄");
+            AddLog(pClient->m_nHpNo, "DC로 모니터 연결 해제 패킷(22002) 보냄", LOG_TO_BOTH);
         } else {
 //            printf("[VPS:%d] DC로 모니터 연결 해제 패킷(22002) 보냄 실패\n", pClient->m_nHpNo);
 
-            AddLog(pClient->m_nHpNo, "DC로 모니터 연결 해제 패킷(22002) 보냄 실패");
+            AddLog(pClient->m_nHpNo, "DC로 모니터 연결 해제 패킷(22002) 보냄 실패", LOG_TO_BOTH);
         }
     }
 
@@ -779,10 +818,10 @@ bool NetManager::CloseClientManualEx(int nHpNo) {
     // printf("[VPS:%d] [Capture:Summary] 캡쳐 요청=%d번, 캡쳐 응답=%d번 (%s)\n", 
     //             nHpNo, nRcvd1, nSent, (nRcvd1 == nSent) ? "Succeeded" : "Failed");
 
-    char log[512] = {0,};
+    char log[128] = {0,};
     sprintf(log, "[Capture:Summary] 캡쳐 요청=%d번, 캡쳐 응답=%d번 (%s)", 
                 nRcvd1, nSent, (nRcvd1 == nSent) ? "Succeeded" : "Failed");
-    AddLog(nHpNo, log);  
+    AddLog(nHpNo, log, LOG_TO_BOTH);  
 
     nRcvd1 = m_nRecordStartCommandCountReceived[nHpNo - 1];
     int nRcvd2 = m_nRecordStopCommandCountReceived[nHpNo - 1];
@@ -793,7 +832,7 @@ bool NetManager::CloseClientManualEx(int nHpNo) {
 
     sprintf(log, "[Record:Summary] 녹화 시작 요청=%d번, 녹화 정지 요청=%d번, 녹화 정지 응답=%d번 (%s)", 
                 nRcvd1, nRcvd2, nSent, (nRcvd1 == nRcvd2 && nRcvd2 == nSent) ? "Succeeded" : "Failed");
-    AddLog(nHpNo, log);  
+    AddLog(nHpNo, log, LOG_TO_BOTH);  
 
     m_nCaptureCommandReceivedCount[nHpNo - 1] = 0;
     m_nCaptureCompletionCountSent[nHpNo - 1] = 0;
@@ -978,9 +1017,9 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
 
 //            printf("[VPS:%d] Start Command 명령 받음: LCD Width=%d, Height=%d\n", nHpNo, sVarHor, sVarVer);
 
-            char log[512] = {0,};
+            char log[128] = {0,};
             sprintf(log, "Start Command 명령 받음: LCD Width=%d, Height=%d", sVarHor, sVarVer);
-            AddLog(nHpNo, log);  
+            AddLog(nHpNo, log, LOG_TO_BOTH);  
 
             // start mirroring
             m_mirror.StartMirroring(nHpNo, DoMirrorCallback, DoMirrorStoppedCallback);
@@ -999,9 +1038,8 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
                 force = false;
             }
 
-            printf("[VPS:%d] Stop Command 명령 받음 : 채널 서비스 종료 처리 수행 == %s\n", nHpNo, force ? "TRUE" : "FLASE");
-
-//            AddLog(nHpNo, "Stop Command 명령 받음 : 채널 서비스 종료 처리 수행");  
+//            printf("[VPS:%d] Stop Command 명령 받음 : 채널 서비스 종료 처리 수행 == %s\n", nHpNo, force ? "TRUE" : "FLASE");
+            AddLog(nHpNo, "Stop Command 명령 받음 : 채널 서비스 종료 처리 수행", LOG_TO_BOTH);  
 
             // 캡쳐 중/녹화 중이면, VPS가 DC로 응답하기 전
             // VPS_CAPTURE_RESPONSE_WAITING_TIME 만큼 기다린다.
@@ -1023,7 +1061,6 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
             }
 
             if(force) {
-                printf("[VPS:%d] Stop Command 명령 받음 : FORCE CLOSE SOCKET\n", nHpNo);
                 m_isOnService[nHpNo - 1] = false;
             }
 
@@ -1034,26 +1071,16 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
         break;
 
         case CMD_VERTICAL: {
-            m_mirror.SendKeyFrame(nHpNo);
-
-            m_iRefreshCH[nHpNo - 1] = 1;    // 전체 영상 전송
-            m_mirror.SetDeviceOrientation(nHpNo, 1);
-
-            AddLog(nHpNo, "영상 세로 모드 출력");  
+            DeviceRotate(nHpNo, true);
         }
         break;
 
         case CMD_HORIZONTAL: {
-            m_mirror.SendKeyFrame(nHpNo);
-
-            m_iRefreshCH[nHpNo - 1] = 1;    // 전체 영상 전송
-            m_mirror.SetDeviceOrientation(nHpNo, 0);
-
-            AddLog(nHpNo, "영상 가로 모드 출력");
+            DeviceRotate(nHpNo, false);
         }
         break;
 
-        case 1010:
+        case CMD_GIF:
         case CMD_RECORD: {
             bool start = pData[0] == 1 ? true : false;
 
@@ -1062,12 +1089,6 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
             } else {
                 m_nRecordStopCommandCountReceived[nHpNo - 1]++;
             }
-
-//            printf("[VPS:%d] [Record] 단말기 녹화 %s 명령 받음\n", nHpNo, start ? "시작" : "정지");
-
-            char log[512] = {0,};
-            sprintf(log, "[Record] 단말기 녹화 %s 명령 받음", start ? "시작" : "정지");
-            AddLog(nHpNo, log);  
 
             // 녹화 명령 처리
             Record(nHpNo, start);
@@ -1087,7 +1108,7 @@ bool NetManager::WebCommandDataParsing2(ClientObject* pClient, char* pRcvData, i
 
 //            printf("[VPS:%d] [Capture] 단말기 화면 캡쳐 명령 받음\n", nHpNo);
 
-            AddLog(nHpNo, "[Capture] 단말기 화면 캡쳐 명령 받음");  
+            AddLog(nHpNo, "[Capture] 단말기 화면 캡쳐 명령 받음", LOG_TO_BOTH);  
 
             m_mirror.SendKeyFrame(nHpNo);
         }
@@ -1228,19 +1249,25 @@ void NetManager::UpdateState(int id) {
             }
 
             // 무조건 FPS 값을 보내는 것이 아니라, 보낼지 체크하고 보냄.
-//            VideoFpsCheckAndSend(nFpsData);
+            VideoFpsCheckAndSend(nFpsData);
         }
         break;
     }
 }
 
-void NetManager::AddLog(int nHpNo, const char* log) {
+void NetManager::AddLog(int nHpNo, const char* log, vps_log_target_t nTarget) {
     if(m_fnAddLog != NULL) {
-        m_fnAddLog(nHpNo, log);
+        m_fnAddLog(nHpNo, log, nTarget);
     } else {
         char logText[512] ={0,};
 
-        sprintf(logText, "[VPS:%d] %s\n", nHpNo, log);
+        SYSTEM_TIME stTime;
+        GetLocalTime(stTime);
+
+        sprintf(logText, "[%04d%02d%02d %02d:%02d:%02d:%03d] [VPS:%d] %s\n", 
+                            stTime.year, stTime.month, stTime.day, 
+                            stTime.hour, stTime.minute, stTime.second, stTime.millisecond,
+                            nHpNo, log);
 
         printf("%s", logText);
     }

@@ -41,7 +41,10 @@ void* ThreadFunc(void* pArg) {
     /////////////////////////////////////////////////// */
     pClient->m_mirrorSocket = socket(PF_INET, SOCK_STREAM, 0);
     if(pClient->m_mirrorSocket == -1) {
-        printf("[VPS:%d] mirroring sock() error[%d]\n", nHpNo, errno);
+//        printf("[VPS:%d] mirroring sock() error[%d]\n", nHpNo, errno);
+        char log[128] = {0,};
+        sprintf(log, "mirroring sock() error[%d]", errno);
+        pClient->AddLog(log, LOG_TO_FILE);
 
         pClient->CleanUpRunClientThreadData();
 
@@ -58,7 +61,8 @@ void* ThreadFunc(void* pArg) {
     linger opt = {l_onoff, l_linger};
     int state = setsockopt( pClient->m_mirrorSocket, SOL_SOCKET, SO_LINGER, (char*)&opt, sizeof(opt) );
     if(state) {
-        printf("[VPS:%d] mirroring socket setsockopt() SO_LINGER error\n", nHpNo);
+//        printf("[VPS:%d] mirroring socket setsockopt() SO_LINGER error\n", nHpNo);
+        pClient->AddLog("mirroring socket setsockopt() SO_LINGER error", LOG_TO_FILE);
 
         pClient->CleanUpRunClientThreadData();
 
@@ -76,7 +80,10 @@ void* ThreadFunc(void* pArg) {
     servAddr.sin_port = htons(nMirrorPort);
 
     if( connect( pClient->m_mirrorSocket, (sockaddr*)&servAddr, sizeof(servAddr) ) != 0 ) {
-        printf("[VPS:%d] mirroring connect() error[%d]\n", nHpNo, errno);
+//        printf("[VPS:%d] mirroring socket connect() error[%d]\n", nHpNo, errno);
+        char log[128] = {0,};
+        sprintf(log, "mirroring socket connect() error[%d]", errno);
+        pClient->AddLog(log, LOG_TO_FILE);
 
         pClient->CleanUpRunClientThreadData();
 
@@ -95,7 +102,10 @@ void* ThreadFunc(void* pArg) {
     /////////////////////////////////////////////////// */
     pClient->m_controlSocket = socket(PF_INET, SOCK_STREAM, 0);
     if(pClient->m_controlSocket == -1) {
-        printf("[VPS:%d] control sock() error[%d]\n", nHpNo, errno);
+//        printf("[VPS:%d] control sock() error[%d]\n", nHpNo, errno);
+        char log[128] = {0,};
+        sprintf(log, "control sock() error[%d]", errno);
+        pClient->AddLog(log, LOG_TO_FILE);
 
         pClient->CleanUpRunClientThreadData();
 
@@ -108,7 +118,8 @@ void* ThreadFunc(void* pArg) {
 
     state = setsockopt( pClient->m_controlSocket, SOL_SOCKET, SO_LINGER, (char*)&opt, sizeof(opt) );
     if(state) {
-        printf("[VPS:%d] control socket setsockopt() SO_LINGER error\n", nHpNo);
+//        printf("[VPS:%d] control socket setsockopt() SO_LINGER error\n", nHpNo);
+        pClient->AddLog("control socket setsockopt() SO_LINGER error", LOG_TO_FILE);
 
         pClient->CleanUpRunClientThreadData();
 
@@ -125,7 +136,10 @@ void* ThreadFunc(void* pArg) {
     servAddr.sin_port = htons(nControlPort);
 
     if( connect( pClient->m_controlSocket, (sockaddr*)&servAddr, sizeof(servAddr) ) != 0 ) {
-        printf("[VPS:%d] control socket connect() error[%d]\n", nHpNo, errno);
+//        printf("[VPS:%d] control socket connect() error[%d]\n", nHpNo, errno);
+        char log[128] = {0,};
+        sprintf(log, "control socket connect() error[%d]", errno);
+        pClient->AddLog(log, LOG_TO_FILE);
 
         pClient->CleanUpRunClientThreadData();
 
@@ -180,7 +194,8 @@ void* ThreadFunc(void* pArg) {
             if(ret == -1 || ret == 0) {
                 pClient->SetDoExitRunClientThread(true);
 
-                printf("[VPS:%d] Mirroring socket is disconnected.\n", nHpNo);
+//                printf("[VPS:%d] Mirroring socket is disconnected.\n", nHpNo);
+                pClient->AddLog("Mirroring socket is disconnected.", LOG_TO_FILE);
                 break;
             }
         }
@@ -190,7 +205,8 @@ void* ThreadFunc(void* pArg) {
 #endif
 
     pClient->SetRunClientThreadReady(false);
-    printf("[VPS:%d] Mirroring service stopped\n", nHpNo);
+//    printf("[VPS:%d] Mirroring service stopped\n", nHpNo);
+    pClient->AddLog("Mirroring service stopped", LOG_TO_BOTH);
 
     // Stop 처리에서 이미 보냄
 //    // send : mirror off
@@ -208,6 +224,7 @@ void* ThreadFunc(void* pArg) {
 MIR_Client::MIR_Client() {
     m_pMirroringRoutine = NULL;
     m_pMirroringStopRoutine = NULL;
+    m_pLogRoutine = NULL;
 
     m_tID = NULL;
 
@@ -255,14 +272,19 @@ bool MIR_Client::StartRunClientThread(int nHpNo, int nMirroringPort, int nContro
             //     sleep(1);
             // }
 
-            printf("[VPS:%d] Mirroring thread create success\n", nHpNo);
+//            printf("[VPS:%d] Mirroring thread create success\n", nHpNo);
+            AddLog("Mirroring thread create success", LOG_TO_FILE);
 
             ret = true;
         } else {
-            printf("[VPS:%d] Mirroring thread creation fail[%d]\n", nHpNo, errno);
+//            printf("[VPS:%d] Mirroring thread creation fail[%d]\n", nHpNo, errno);
+            char log[128] = {0,};
+            sprintf(log, "Mirroring thread creation fail[%d]", errno);
+            AddLog(log, LOG_TO_FILE);
         }
     } else {
-        printf("[VPS:%d] ALREADY MIRRORING THEAD\n", nHpNo);
+//        printf("[VPS:%d] ALREADY MIRRORING THEAD\n", nHpNo);
+        AddLog("Already mirroring thread", LOG_TO_FILE);
         // send key frame
         SendKeyFramePacket();
     }
@@ -278,6 +300,10 @@ void MIR_Client::StopRunClientThread() {
 
         CleanUpRunClientThreadData();
     }
+}
+
+void MIR_Client::SetAddLogLisnter(PVPS_ADD_LOG_ROUTINE pLogRoutine) {
+    m_pLogRoutine = pLogRoutine;
 }
 
 void MIR_Client::OnMirrorStopped(int nStopCode) {
@@ -315,14 +341,18 @@ void MIR_Client::CleanUpRunClientThreadData() {
         SetDoExitRunClientThread(false);
 
         if(m_mirrorSocket != -1) {
-            printf("[VPS:%d] Mirroring Socket closed\n", m_nHpNo);
+//            printf("[VPS:%d] Mirroring Socket closed\n", m_nHpNo)
+            AddLog("Mirroring Socket closed", LOG_TO_FILE);
+
             shutdown(m_mirrorSocket, SHUT_RDWR);
             close(m_mirrorSocket);
             m_mirrorSocket = -1;
         }
 
         if(m_controlSocket != -1) {
-            printf("[VPS:%d] Control Socket closed\n", m_nHpNo);
+//            printf("[VPS:%d] Control Socket closed\n", m_nHpNo);
+            AddLog("Control Socket closed", LOG_TO_FILE);
+
             shutdown(m_controlSocket, SHUT_RDWR);
             close(m_controlSocket);
             m_controlSocket = -1;
@@ -558,10 +588,11 @@ int MIR_Client::GetData() {
     if(m_isHeadOfFrame) {
         r = m_nCurrReadSize = recv(m_mirrorSocket, m_pRcvBuf + m_nOffset, 4, 0);
         if(m_nCurrReadSize == -1) {
-            printf("[VPS:%d] Read Error : %d\n", m_nHpNo, m_nOffset);
+//            printf("[VPS:%d] Read Error : %d\n", m_nHpNo, r);
             return r;
         } else if(m_nCurrReadSize == 0) {
-            printf("[VPS:%d] Read Error : Gracefully closed.\n", m_nHpNo);
+//            printf("[VPS:%d] Read Error : gracefully closed.\n", m_nHpNo);
+            AddLog("Read Error : gracefully closed.", LOG_TO_FILE);
             return r;
         } 
 
@@ -605,4 +636,10 @@ int MIR_Client::GetData() {
     }
 
     return m_nCurrReadSize;
+}
+
+void MIR_Client::AddLog(const char* log, vps_log_target_t nTarget) {
+    if(m_pLogRoutine != NULL) {
+        m_pLogRoutine(m_nHpNo, log, nTarget);
+    }
 }

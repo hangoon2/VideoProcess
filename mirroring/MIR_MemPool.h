@@ -5,7 +5,7 @@
 #include "../common/Mutex.h"
 
 #define MIR_DEFAULT_MEM_POOL_UINT   (1024 * 1024)
-#define MIR_DEFAULT_MEM_POOL_UNIT_COUNT 20
+#define MIR_DEFAULT_MEM_POOL_UNIT_COUNT 30
 
 class MIR_MemPool {
 public:

@@ -83,6 +83,7 @@ typedef long                INT64;
 #define CMD_HORIZONTAL                  1004
 #define CMD_RECORD                      1005
 #define CMD_JPG_CAPTURE                 1006
+#define CMD_GIF                         1010
 // VPS -> VD(최대 녹화 시간에 도달하면 VPS에서 클라이언트로 녹화 중지 명령 보냄)
 #define CMD_STOP_RECORDING              1007
 #define CMD_WAKEUP                      1008
@@ -162,8 +163,15 @@ struct SYSTEM_TIME {
     int millisecond;
 };
 
+typedef enum {
+    LOG_TO_FILE = 0,
+    LOG_TO_UI = 1,
+    LOG_TO_BOTH = 2
+} vps_log_target_t;
+
 typedef bool (*PMIRRORING_ROUTINE)(void* pMirroringPacket);
 typedef void (*PMIRRORING_STOP_ROUTINE)(int nHpNo, int nStopCode);
+typedef void (*PVPS_ADD_LOG_ROUTINE)(int nHpNo, const char* log, vps_log_target_t nTarget);
 
 /*//////////////////////////////////////////////
 //               Common Function              //

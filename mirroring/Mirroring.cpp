@@ -81,8 +81,13 @@ Mirroring::~Mirroring() {
 #endif
 }
 
-void Mirroring::Initialize(PMIRRORING_ROUTINE pRecordRoutine) {
+void Mirroring::Initialize(PMIRRORING_ROUTINE pRecordRoutine, PVPS_ADD_LOG_ROUTINE pLogRoutine) {
     m_pRecordingRoutine = pRecordRoutine;
+    m_pLogRoutine = pLogRoutine;
+
+    for(int i = 0; i < MAXCHCNT; i++) {
+        m_mirClient[i].SetAddLogLisnter(pLogRoutine);
+    }
 }
 
 bool Mirroring::StartMirroring(int nHpNo, 

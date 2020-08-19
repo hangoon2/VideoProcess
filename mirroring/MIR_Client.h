@@ -26,6 +26,8 @@ public:
                                 PMIRRORING_ROUTINE pMirroringRoutine, PMIRRORING_STOP_ROUTINE pMirroringStopRoutine);
     void StopRunClientThread();
 
+    void SetAddLogLisnter(PVPS_ADD_LOG_ROUTINE pLogRoutine);
+
     void OnMirrorStopped(int nStopCode);
 
     void SetIsThreadRunning(bool isThreadRunning);
@@ -48,6 +50,8 @@ public:
     bool GetData(int efd, Socket sock, int waitms);
     int GetData();
 
+    void AddLog(const char* log, vps_log_target_t nTarget);
+
 private:
     BYTE* MakeOnyPacketKeyFrame(int& size);
     BYTE* MakeOnyPacketOnOff(bool onoff, int& size);
@@ -61,6 +65,7 @@ public:
 private:
     PMIRRORING_ROUTINE m_pMirroringRoutine;
     PMIRRORING_STOP_ROUTINE m_pMirroringStopRoutine;
+    PVPS_ADD_LOG_ROUTINE m_pLogRoutine;
 
     pthread_t m_tID;
 

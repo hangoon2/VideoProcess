@@ -37,6 +37,8 @@ private:
     ClientList m_clientList;
 
     void* m_pNetMgr;
+
+    bool m_isRunServer;
 };
 
 #endif

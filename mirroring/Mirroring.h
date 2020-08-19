@@ -8,7 +8,7 @@ public:
     Mirroring();
     virtual ~Mirroring();
 
-    void Initialize(PMIRRORING_ROUTINE pRecordRoutine);
+    void Initialize(PMIRRORING_ROUTINE pRecordRoutine, PVPS_ADD_LOG_ROUTINE pLogRoutine);
     bool StartMirroring(int nHpNo, PMIRRORING_ROUTINE pMirroringRoutine, PMIRRORING_STOP_ROUTINE pMirroringStopRoutine);
     void StopMirroring(int nHpNo);
 
@@ -27,6 +27,7 @@ private:
     PMIRRORING_ROUTINE m_pMirroringRoutine[MAXCHCNT];
     PMIRRORING_STOP_ROUTINE m_pMirroringStopRoutine[MAXCHCNT];
     PMIRRORING_ROUTINE m_pRecordingRoutine;
+    PVPS_ADD_LOG_ROUTINE m_pLogRoutine;
 
     int m_nDeviceOrientation[MAXCHCNT];
 

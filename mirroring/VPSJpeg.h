@@ -8,8 +8,6 @@ public:
     VPSJpeg();
     virtual ~VPSJpeg();
 
-    int Decode_Jpeg(BYTE* pJpgSrc, int nJpgSrcLen, BYTE* pOut);
-    int Encode_Jpeg(BYTE* pJpgSrc, BYTE* pOut, int quality, int width, int height);
 //    int RotateLeft(BYTE* pJpgSrc, int nJpgSrcLen, int quality);
     int RotateLeft(BYTE* pJpgSrc, int nJpgSrcLen, int quality, int width, int height);
 //    int RotateRight(BYTE* pJpgSrc, int nJpgSrcLen, int quality);
@@ -17,7 +15,12 @@ public:
 
     bool SaveJpeg(char* filePath, BYTE* pJpgSrc, int nJpgSrcLen, int quality);
 
+private:
+    int Decode_Jpeg(BYTE* pJpgSrc, int nJpgSrcLen, BYTE* pOut);
+    int Encode_Jpeg(BYTE* pJpgSrc, BYTE* pOut, int quality, int width, int height);
+
     BYTE* m_pJpgData;
+    BYTE* m_pRgbData;
 };
 
 #endif
