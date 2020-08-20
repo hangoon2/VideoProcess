@@ -3,7 +3,9 @@
 
 #include <sys/socket.h>
 #include <sys/event.h>
+#include <sys/ioctl.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -12,10 +14,8 @@
 #include <string.h>
 #include <stdlib.h>
 
-//#define exit_if(r, ...) if(r) {printf(__VA_ARGS__); printf("\nerror no: %d error msg %s\n", errno, strerror(errno)); exit(1);}
-
 const int kReadEvent = 1;
-const int kWriteEvent = 2;
+//const int kWriteEvent = 2;
 
 AsyncMediaServerSocket::AsyncMediaServerSocket() {
     m_serverSock = INVALID_SOCKET;
@@ -32,8 +32,25 @@ AsyncMediaServerSocket::~AsyncMediaServerSocket() {
 
     if(m_serverSock != INVALID_SOCKET) {
         printf("[VPS:0] Closed Listening Server\n");
+        UpdateEvents(m_queueID, m_serverSock, kReadEvent, true);
+
+        shutdown(m_serverSock, SHUT_RDWR);
         close(m_serverSock);
         m_serverSock = INVALID_SOCKET;
+    }
+}
+
+void AsyncMediaServerSocket::SetBlock(Socket sock) {
+    int flags = fcntl(sock, F_GETFL, 0);
+    if(flags < 0) {
+        printf("[VPS:0] fcntl failed\n");
+        return;
+    }
+
+    int r = fcntl(sock, F_SETFL, flags & O_NONBLOCK);
+    if(r < 0) {
+        printf("[VPS:0] fcntl failed\n");
+        return;
     }
 }
 
@@ -52,23 +69,29 @@ void AsyncMediaServerSocket::SetNonBlock(Socket sock) {
 }
 
 void AsyncMediaServerSocket::UpdateEvents(int efd, Socket sock, int events, bool modify) {
-    struct kevent ev[2];
+    struct kevent ev[1];
     int n = 0;
     
     if(events & kReadEvent) {
-        EV_SET(&ev[n++], sock, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, (void *)(intptr_t)sock);
+        EV_SET(&ev[n], sock, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, (void*)(intptr_t)sock);
     } else if(modify) {
-        EV_SET(&ev[n++], sock, EVFILT_READ, EV_DELETE, 0, 0, (void *)(intptr_t)sock);
+        EV_SET(&ev[n], sock, EVFILT_READ, EV_DELETE, 0, 0, (void*)(intptr_t)sock);
     }
 
     // if(events & kWriteEvent) {
-    //     EV_SET(&ev[n++], fd, EVFILT_WRITE, EV_ADD | EV_ENABLE, 0, 0, (void *)(intptr_t)fd);
+    //     EV_SET(&ev[n++], sock, EVFILT_WRITE, EV_ADD | EV_ENABLE, 0, 0, (void*)(intptr_t)sock);
     // } else if(modify) {
-    //     EV_SET(&ev[n++], fd, EVFILT_WRITE, EV_DELETE, 0, 0, (void *)(intptr_t)fd);
+    //     EV_SET(&ev[n++], sock, EVFILT_WRITE, EV_DELETE, 0, 0, (void*)(intptr_t)sock);
+    // }
+
+    // if(events & kExceptEvent) {
+    //     EV_SET(&ev[n++], sock, EVFILT_AIO, EV_ADD | EV_ENABLE, 0, 0, (void*)(intptr_t)sock);
+    // } else if(modify) {
+    //     EV_SET(&ev[n++], sock, EVFILT_AIO, EV_DELETE, 0, 0, (void*)(intptr_t)sock);
     // }
 
 //    printf("%s Socket %d events read %d\n", modify ? "mod" : "add", sock, events & kReadEvent);
-    kevent(efd, ev, n, NULL, 0, NULL);
+    kevent(efd, ev, 1, NULL, 0, NULL);
 }
 
 void AsyncMediaServerSocket::OnAccept(int efd, ServerSocket serverSock) {
@@ -99,9 +122,17 @@ void AsyncMediaServerSocket::OnAccept(int efd, ServerSocket serverSock) {
 
     m_clientList.Insert(clientSock, pClient);
 
-    int bufsize = 1024 * 1024;
-    socklen_t len = sizeof(bufsize);
-    setsockopt(clientSock, SOL_SOCKET, SO_SNDBUF, &bufsize, sizeof(bufsize));
+    int bufsize = 1024 * 1024 * 4;
+    setsockopt( clientSock, SOL_SOCKET, SO_SNDBUF, &bufsize, sizeof(bufsize) );
+
+    // 종료방식
+    short l_onOff = 1, l_linger = 0;    // 즉시 연결을 종료한다. 상대방에게는 FIN이나 RTS 시그널이 전달된다.
+    linger opt = {l_onOff, l_linger};
+    setsockopt( clientSock, SOL_SOCKET, SO_LINGER, &opt, sizeof(opt) );
+
+    // 즉시전송(Nagle 알고리즘 해제)
+    int optval = 1;
+    setsockopt( clientSock, IPPROTO_TCP, TCP_NODELAY, &optval, sizeof(optval) );
 
 //    printf("[VPS:0] Accept : %s\n", pClient->m_strIPAddr);
     char log[128] = {0,};
@@ -123,7 +154,7 @@ void AsyncMediaServerSocket::OnRead(int efd, Socket sock) {
         return;
     }
  
-    printf("=========> ON READ CALL ONCLOSE =====> \n");
+//    printf("=========> ON READ CALL ONCLOSE =====> \n");
     OnClose(sock);
 }
 
@@ -133,6 +164,8 @@ bool AsyncMediaServerSocket::OnClose(Socket sock) {
         pClient->m_isClosing = true;
 
         // close socket
+        UpdateEvents(m_queueID, sock, kReadEvent, true);
+
         shutdown(sock, SHUT_RDWR);
         close(sock);
 //        printf("[VPS:%d] Socket %d closed\n", pClient->m_nHpNo, sock);
@@ -162,14 +195,14 @@ bool AsyncMediaServerSocket::OnClose(Socket sock) {
             return true;
         }
 
-        if( !pClient->m_isExitCommandReceived && nClientType != CLIENT_TYPE_MONITOR ) {
-            // 비정상적으로 연결 해제된 Client 정보를 저장하되
-            // m_SocketClient 변수값은 초기화한다.
-            printf("========= 비정상 종료 처리 필요 ==========\n");
-            pClient->m_isClosing = false;
+        // if( !pClient->m_isExitCommandReceived && nClientType != CLIENT_TYPE_MONITOR ) {
+        //     // 비정상적으로 연결 해제된 Client 정보를 저장하되
+        //     // m_SocketClient 변수값은 초기화한다.
+        //     printf("========= 비정상 종료 처리 필요 ==========\n");
+        //     pClient->m_isClosing = false;
 
-            return true;
-        }
+        //     return true;
+        // }
 
         if(nClientType == CLIENT_TYPE_HOST) {
             // 동영상 녹화 정지
@@ -223,14 +256,11 @@ bool AsyncMediaServerSocket::OnSend(ClientObject* pClient, BYTE* pData, int iLen
 
     Socket sock = pClient->m_clientSock;
 
-    int nOffset = 0;
-    int dataSize = iLen;
-
-//    for(int i = 0; i < 5; i++) {
-    while(1) {
-        int nSendResult = send(sock, pData + nOffset, dataSize, 0);
+    for(int i = 0; i < 5; i++) {
+        int nSendResult = send(sock, pData, iLen, 0);
         if(nSendResult == SOCKET_ERROR) {
             if(errno == EWOULDBLOCK) {
+//                printf("SOCKET BLOCKED\n");
                 usleep(1);
                 continue;
             } else {
@@ -238,23 +268,47 @@ bool AsyncMediaServerSocket::OnSend(ClientObject* pClient, BYTE* pData, int iLen
                 return false;
             }
         } else {
-            nOffset += nSendResult;
-            dataSize -= nSendResult;
-
-            if(nOffset < iLen) {
-                continue;
-            }
-
+            if(nSendResult != iLen)
+                printf("SEND DATA : %d/%d\n", nSendResult, iLen);
             return true;
         }
     }
 
-    printf("[VPS:%d] SEND DATA FAILED : %d / %d\n", pClient->m_nHpNo, nOffset, iLen);
+//    printf("SEND FAILED : %d\n", total);
+
+    // int nOffset = 0;
+    // int dataSize = iLen;
+
+    // for(int i = 0; i < 10; i++) {
+    //     int nSendResult = send(sock, pData + nOffset, dataSize, 0);
+    //     if(nSendResult == SOCKET_ERROR) {
+    //         if(errno == EWOULDBLOCK) {
+    //             usleep(1);
+    //             continue;
+    //         } else {
+    //             printf("Socket Send() Error : %d\n", errno);
+    //             return false;
+    //         }
+    //     } else {
+    //         nOffset += nSendResult;
+    //         dataSize -= nSendResult;
+
+    //         if(nOffset < iLen) {
+    //             continue;
+    //         }
+
+    //         return true;
+    //     }
+    // }
+
+    // int err = errno;
+    // if(err != 60)
+    //     printf("[VPS:%d] SEND DATA FAILED : %d / %d ===> %d\n", pClient->m_nHpNo, nOffset, iLen, err);
 
     return false;
 }
 
-void AsyncMediaServerSocket::OnServerEvent(int efd, ServerSocket serverSock, int waitms) {
+bool AsyncMediaServerSocket::OnServerEvent(int efd, ServerSocket serverSock, int waitms) {
     struct timespec timeout;
     timeout.tv_sec = waitms / 1000;
     timeout.tv_nsec = (waitms % 1000) * 1000 * 1000;
@@ -273,27 +327,35 @@ void AsyncMediaServerSocket::OnServerEvent(int efd, ServerSocket serverSock, int
                 OnRead(efd, clientSock);
             }
         } else if(events == EVFILT_WRITE) {
-
+//            printf("-------------------------> EVFILT_WRITE");
+        } else if(events == EVFILT_SIGNAL) {
+//            printf("========================================> EVFILT_SIGNAL\n");
+            return false;
         } else {
             printf("[VPS:0] unknown event\n");
         }
     }
+
+    return true;
 }
 
 int AsyncMediaServerSocket::InitSocket(void* pNetMgr, int port) {
     m_pNetMgr = pNetMgr;
 
-    int epollfd = kqueue();
-    if(epollfd < 0) {
+    m_queueID = kqueue();
+    if(m_queueID < 0) {
         printf("[VPS:0] epoll create failed\n");
-        return 0;
+        return -1;
     }
 
     m_serverSock = socket(AF_INET, SOCK_STREAM, 0);
     if(m_serverSock < 0) {
         printf("[VPS:0] server socket failed\n");
-        return 0;
+        return -1;
     }
+
+    int option = 1;
+    setsockopt( m_serverSock, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option) );
 
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof addr);
@@ -301,16 +363,32 @@ int AsyncMediaServerSocket::InitSocket(void* pNetMgr, int port) {
     addr.sin_port = htons(port);
     addr.sin_addr.s_addr = INADDR_ANY;
 
-    int r = ::bind(m_serverSock, (struct sockaddr *)&addr, sizeof(struct sockaddr));
+    int r = ::bind( m_serverSock, (struct sockaddr *)&addr, sizeof(struct sockaddr) );
     if(r) {
         printf("[VPS:0] bind to 0.0.0.0:%d failed %d %s", port, errno, strerror(errno));
-        return 0;
+        return -1;
     } 
 
-    r = listen(m_serverSock, 20);
+    // 입출력 버퍼크기의 변경
+    int send_buf = 1024 * 128;
+    int rcv_buf = 1024 * 128;
+
+    setsockopt( m_serverSock, SOL_SOCKET, SO_RCVBUF, &rcv_buf, sizeof(rcv_buf) );
+    setsockopt( m_serverSock, SOL_SOCKET, SO_SNDBUF, &send_buf, sizeof(send_buf) );
+
+    // 종료방식
+    short l_onOff = 1, l_linger = 0;    // 즉시 연결을 종료한다. 상대방에게는 FIN이나 RTS 시그널이 전달된다.
+    linger opt = {l_onOff, l_linger};
+    setsockopt( m_serverSock, SOL_SOCKET, SO_LINGER, &opt, sizeof(opt) );
+
+    // 즉시전송(Nagle 알고리즘 해제)
+    int optval = 1;
+    setsockopt( m_serverSock, IPPROTO_TCP, TCP_NODELAY, &optval, sizeof(optval) );
+
+    r = listen(m_serverSock, 300);  // Client(host 1 + guest 20) * device num + Device Controller
     if(r) {
         printf("[VPS:0] listen failed %d %s", errno, strerror(errno));
-        return 0;
+        return -1;
     }
 
 //    printf("[VPS:0] VPS Server listening at %d\n", port);
@@ -320,13 +398,20 @@ int AsyncMediaServerSocket::InitSocket(void* pNetMgr, int port) {
     ((NetManager*)m_pNetMgr)->AddLog(0, log, LOG_TO_FILE); 
 
     SetNonBlock(m_serverSock);
-    UpdateEvents(epollfd, m_serverSock, kReadEvent, false);
+    UpdateEvents(m_queueID, m_serverSock, kReadEvent, false);
+
+    struct kevent ev;
+    EV_SET(&ev, SIGINT, EVFILT_SIGNAL, EV_ADD | EV_ENABLE, 0, 0, NULL);
+    signal(SIGINT, SIG_IGN);
+    kevent(m_queueID, &ev, 1, NULL, 0, NULL);
+
+    ((NetManager*)m_pNetMgr)->AddLog(0, "VPS 초기화 완료", LOG_TO_BOTH); 
 
     while(m_isRunServer) {
-        OnServerEvent(epollfd, m_serverSock, 10000);
+        if( !OnServerEvent(m_queueID, m_serverSock, 10000) ) {
+            break;
+        }
     }
-
-    printf("========= CLOSE SERVER SOCKET ==========\n");
 
     return 0;
 }
@@ -383,5 +468,5 @@ void AsyncMediaServerSocket::DeleteClient(ClientObject* pClient) {
 
     delete pClient;
     pClient = NULL;
-    printf("============== DELETE CLIENT ============== %d\n", nHpNo);
+//    printf("============== DELETE CLIENT ============== %d\n", nHpNo);
 }

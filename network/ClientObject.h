@@ -37,6 +37,9 @@ public:
 
     bool m_isClosing;
 
+    DWORD m_sendBytes;
+    DWORD m_sendBytesOld; 
+
     void Lock();
     void Unlock();
 

@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
+#include <sys/socket.h>
 
 ClientObject::ClientObject() {
     m_rcvCommandBuffer = new char[RECV_BUFFER_SIZE];
@@ -21,13 +22,18 @@ ClientObject::ClientObject() {
     m_isFirstImage = true;
 
     m_isClosing = false;
+
+    m_sendBytes = 0;
+    m_sendBytesOld = 0;
 }
 
 ClientObject::~ClientObject() {
     Lock();
 
-    // printf("[VPS:%d] Socket %d closed\n", m_nHpNo, m_clientSock);
-    // close(m_clientSock);
+    if(m_clientSock != INVALID_SOCKET) {
+        shutdown(m_clientSock, SHUT_RDWR);
+        close(m_clientSock);
+    }
 
     m_clientSock = INVALID_SOCKET;
     

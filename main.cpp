@@ -119,6 +119,7 @@ int main(int argc, char *argv[]) {
 #endif
 
     ExitProgram();
+    printf("EXIT PROGRAM\n");
 
     return 0;
 }

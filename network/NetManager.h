@@ -4,6 +4,7 @@
 #include "AsyncMediaServerSocket.h"
 #include "../mirroring/Mirroring.h"
 #include "../common/Timer.h"
+#include "../common/VPSLogger.h"
 
 class NetManager {
 public:
@@ -100,7 +101,10 @@ private:
 
     Timer m_timer_1;
     Timer m_timer_10;
+    Timer m_timer_15;
     Timer m_timer_20;
+
+    VPSLogger m_logger;
 };
 
 #endif

@@ -24,11 +24,12 @@ public:
     ClientObject** GetClientList(int nHpNo);
     
 private:
+    void SetBlock(Socket sock);
     void SetNonBlock(Socket sock);
     void UpdateEvents(int efd, Socket sock, int events, bool modify);
     void OnAccept(int efd, ServerSocket serverSock);
     void OnRead(int efd, Socket sock);
-    void OnServerEvent(int efd, ServerSocket serverSock, int waitms);
+    bool OnServerEvent(int efd, ServerSocket serverSock, int waitms);
     void CloseAllGuest(int nHpNo);
     void DeleteClient(ClientObject* pClient);
 
@@ -39,6 +40,8 @@ private:
     void* m_pNetMgr;
 
     bool m_isRunServer;
+
+    int m_queueID;
 };
 
 #endif

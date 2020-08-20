@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#define VPS_VERSION         "1.0.0"
+
 #define MAXCHCNT            10
 #define MAXCLIENT_PER_CH    21  // Host(1) + Guest(20) = 21
 
@@ -30,9 +32,11 @@ typedef unsigned int        UINT;
 typedef unsigned long long  ULONGLONG;
 typedef int                 INT;
 typedef long                INT64;
+typedef unsigned long       DWORD;
 
 #define TIMERID_JPGFPS_1SEC         1000
 #define TIMERID_10SEC               10 * 1000
+#define TIMERID_15SEC               15 * 1000
 #define TIMERID_20SEC               20 * 1000
 
 #define RECORDING_TIME              (30 * 60 * 1000)
@@ -184,6 +188,7 @@ uint32_t SwapEndianU4(UINT nValue);
 BYTE* MakeSendData2(short usCmd, int nHpNo, int dataLen, BYTE* pData, BYTE* pDstData, int& totLen);
 
 void GetLocalTime(SYSTEM_TIME &stTime);
+int GetCurrentDay();
 ULONGLONG GetTickCount();
 
 bool DoesFileExist(const char* filePath);

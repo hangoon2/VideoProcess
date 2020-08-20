@@ -17,51 +17,6 @@ extern "C" {
 
 #include <setjmp.h>
 
-void Write_to_jpegfile(char* filename, unsigned char* memory, int width, int height) {
-    JSAMPLE* image_buffer = (JSAMPLE*)memory;
-    int image_height = height;
-    int image_width = width;
-
-    struct jpeg_compress_struct cinfo;
-    struct jpeg_error_mgr jerr;
-    FILE* outfile;
-    JSAMPROW row_pointer[1];
-
-    cinfo.err = jpeg_std_error(&jerr);
-
-    jpeg_create_compress(&cinfo);
-
-    if( (outfile = fopen(filename, "wb")) == NULL ) {
-        return;
-    }
-
-    jpeg_stdio_dest(&cinfo, outfile);
-
-    cinfo.image_width = image_width;
-    cinfo.image_height = image_height;
-    cinfo.input_components = 3;
-    cinfo.in_color_space = JCS_EXT_BGR;
-
-    jpeg_set_defaults(&cinfo);
-
-    jpeg_set_quality(&cinfo, 90, TRUE);
-
-    jpeg_start_compress(&cinfo, TRUE);
-
-    int row_stride = width * cinfo.input_components;
-
-    while(cinfo.next_scanline < cinfo.image_height) {
-        row_pointer[0] = &image_buffer[cinfo.next_scanline  * row_stride];
-        (void)jpeg_write_scanlines(&cinfo, row_pointer, 1);
-    }
-
-    jpeg_finish_compress(&cinfo);
-
-    fclose(outfile);
-
-    jpeg_destroy_compress(&cinfo);
-}
-
 int Encode(BYTE* pJpgSrc, Mat& img, int quality) {
     vector<uchar> buff;
     vector<int> param = vector<int>(2);
@@ -247,4 +202,54 @@ int VPSJpeg::Encode_Jpeg(BYTE* pJpgSrc, BYTE* pOut, int quality, int width, int 
     memcpy(pOut, (const void*)m_pJpgData, outLen);
 
     return (int)outLen;
+}
+
+bool VPSJpeg::Write_to_jpegfile(char* filename, BYTE* pJpgSrc, int width, int height, int quality) {
+    struct jpeg_compress_struct cinfo;
+    struct jpeg_error_mgr jerr;
+    FILE* outfile;
+
+    cinfo.err = jpeg_std_error(&jerr);
+
+    jpeg_create_compress(&cinfo);
+
+    if( (outfile = fopen(filename, "wb")) == NULL ) {
+        return false;
+    }
+
+    jpeg_stdio_dest(&cinfo, outfile);
+
+    cinfo.image_width = width;
+    cinfo.image_height = height;
+    cinfo.input_components = 3;
+    cinfo.in_color_space = JCS_EXT_RGB;
+
+    jpeg_set_defaults(&cinfo);
+
+    jpeg_set_quality(&cinfo, quality, TRUE);
+
+    jpeg_start_compress(&cinfo, TRUE);
+
+    int row_stride = width * cinfo.input_components;
+
+    JSAMPLE* image_buffer = (JSAMPLE*)pJpgSrc;
+    JSAMPROW row_pointer[1];
+
+    while(cinfo.next_scanline < cinfo.image_height) {
+        row_pointer[0] = &image_buffer[cinfo.next_scanline  * row_stride];
+        (void)jpeg_write_scanlines(&cinfo, row_pointer, 1);
+    }
+
+    jpeg_finish_compress(&cinfo);
+
+    fclose(outfile);
+
+    jpeg_destroy_compress(&cinfo);
+
+    return true;
+}
+
+BYTE* VPSJpeg::Decode_Jpeg(BYTE* pJpgSrc, int nJpgSrcLen, int width, int height) {
+    int ret = Decode_Jpeg(pJpgSrc, nJpgSrcLen, m_pRgbData); 
+    return m_pRgbData;
 }

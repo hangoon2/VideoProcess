@@ -113,6 +113,13 @@ void GetLocalTime(SYSTEM_TIME &stTime) {
     stTime.millisecond = time.tv_usec / 1000;
 }
 
+int GetCurrentDay() {
+    SYSTEM_TIME stTime;
+    GetLocalTime(stTime);
+
+    return stTime.day;
+}
+
 ULONGLONG GetTickCount() {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);

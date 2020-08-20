@@ -11,8 +11,8 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavutil/avutil.h>
 #include <libavutil/imgutils.h>
-#include <libavutil/opt.h>
-#include <libavutil/pixdesc.h>
+//#include <libavutil/opt.h>
+//#include <libavutil/pixdesc.h>
 #include <libswscale/swscale.h>
 }
 
@@ -72,7 +72,7 @@ private:
     AVStream* m_stream;
     SwsContext* m_swsctx;
 
-    AVFrame* m_rgb32;
+    AVFrame* m_rgb24;
     AVFrame* m_yuv420p;
 };
 
