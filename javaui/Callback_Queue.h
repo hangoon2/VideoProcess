@@ -1,8 +1,7 @@
-#ifndef REC_QUEUE_H
-#define REC_QUEUE_H
+#ifndef CALLBACK_QUEUE_H
+#define CALLBACK_QUEUE_H
 
-#include "Rec_MemPool.h"
-#include "../common/Mutex.h"
+#include "Callback_MemPool.h"
 
 #include <deque>
 
@@ -10,10 +9,10 @@ using namespace std;
 
 typedef deque<HDCAP*> rec_que_t;
 
-class Rec_Queue {
+class Callback_Queue {
 public:
-    Rec_Queue();
-    virtual ~Rec_Queue();
+    Callback_Queue();
+    virtual ~Callback_Queue();
 
     void EnQueue(HDCAP* recInfo);
     bool DeQueue(HDCAP* o_recInfo);
@@ -28,9 +27,9 @@ private:
 
 private:
     rec_que_t m_recQueue;
-    Rec_MemPool m_memPool;
+    Callback_MemPool m_memPool;
 
-    Mutex m_mQueueLock;
+//    QMutex m_mQueueLock;
 };
 
 #endif

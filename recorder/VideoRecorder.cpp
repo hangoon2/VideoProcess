@@ -245,8 +245,6 @@ bool VideoRecorder::OpenEncoder(char* filePath) {
     AVOutputFormat* fmt = av_guess_format(NULL, filePath, NULL);
     m_outctx->oformat = fmt;
 
-    printf("FILE PATH : %s\n", filePath);
-
     ret = avio_open2(&m_outctx->pb, filePath, AVIO_FLAG_WRITE, NULL, NULL);
     if(ret < 0) {
         avformat_free_context(m_outctx);
@@ -305,8 +303,6 @@ bool VideoRecorder::OpenEncoder(char* filePath) {
         printf("failed avcodec_open2\n");
         return false;
     }
-
-    printf("Success Open Encoder\n");
 
     return true;
 }

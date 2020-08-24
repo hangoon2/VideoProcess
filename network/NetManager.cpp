@@ -135,13 +135,9 @@ NetManager::NetManager(PVPS_ADD_LOG_ROUTINE fnAddLog) {
     m_timer_20.Start(TIMERID_20SEC, OnTimer);
 
     m_mirror.Initialize(NULL, DoAddLogCallback);
-
-    printf("Network Manager Create\n");
 }
 
 NetManager::~NetManager() {
-    printf("Network Manager Destroy\n");
-
     AddLog(0, "VPS 종료", LOG_TO_FILE);
 }
 
@@ -1344,8 +1340,8 @@ void NetManager::AddLog(int nHpNo, const char* log, vps_log_target_t nTarget) {
         m_fnAddLog(nHpNo, log, nTarget);
     } 
     
-    char prefix[64] = {0,};
-    char logText[512] = {0,};
+    char prefix[32] = {0,};
+    char logText[256] = {0,};
 
     SYSTEM_TIME stTime;
     GetLocalTime(stTime);

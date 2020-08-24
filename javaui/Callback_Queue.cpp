@@ -1,28 +1,28 @@
-#include "Rec_Queue.h"
+#include "Callback_Queue.h"
 
-Rec_Queue::Rec_Queue() {
+Callback_Queue::Callback_Queue() {
 
 }
 
-Rec_Queue::~Rec_Queue() {
+Callback_Queue::~Callback_Queue() {
     ClearQueueInternal();
 }
 
-void Rec_Queue::EnQueue(HDCAP* recInfo) {
-    m_mQueueLock.Lock();
+void Callback_Queue::EnQueue(HDCAP* recInfo) {
+//    m_mQueueLock.lock();
 
     HDCAP* itemClone = CreateQueueItem(recInfo);
     if(itemClone != nullptr) {
         m_recQueue.push_back(itemClone);
     }
 
-    m_mQueueLock.Unlock();
+//    m_mQueueLock.unlock();
 }
 
-bool Rec_Queue::DeQueue(HDCAP* o_recInfo) {
+bool Callback_Queue::DeQueue(HDCAP* o_recInfo) {
     bool ret = false;
 
-    m_mQueueLock.Lock();
+//    m_mQueueLock.lock();
 
     if(m_recQueue.size() > 0) {
         rec_que_t::iterator iterBegin = m_recQueue.begin();
@@ -36,28 +36,28 @@ bool Rec_Queue::DeQueue(HDCAP* o_recInfo) {
         ret = true;
     }
 
-    m_mQueueLock.Unlock();
+//    m_mQueueLock.unlock();
 
     return ret;
 }
 
-void Rec_Queue::ClearQueue() {
-    m_mQueueLock.Lock();
+void Callback_Queue::ClearQueue() {
+//    m_mQueueLock.lock();
 
     ClearQueueInternal();
 
-    m_mQueueLock.Unlock();
+//    m_mQueueLock.unlock();
 }
 
-void* Rec_Queue::AllocateItemMemory() {
+void* Callback_Queue::AllocateItemMemory() {
     return m_memPool.Alloc();
 }
 
-void Rec_Queue::FreeItemMemory(void* pMemory) {
+void Callback_Queue::FreeItemMemory(void* pMemory) {
     m_memPool.Free(pMemory);
 }
 
-HDCAP* Rec_Queue::CreateQueueItem(HDCAP* pSrc) {
+HDCAP* Callback_Queue::CreateQueueItem(HDCAP* pSrc) {
     HDCAP* ret = nullptr;
 
     ret = (HDCAP*)AllocateItemMemory();
@@ -69,13 +69,13 @@ HDCAP* Rec_Queue::CreateQueueItem(HDCAP* pSrc) {
     return ret;
 }
 
-void Rec_Queue::DeleteQueueItem(HDCAP* item) {
+void Callback_Queue::DeleteQueueItem(HDCAP* item) {
     if(item != nullptr) {
         FreeItemMemory(item);
     }
 }
 
-void Rec_Queue::ClearQueueInternal() {
+void Callback_Queue::ClearQueueInternal() {
     rec_que_t::iterator iterBegin = m_recQueue.begin();
     rec_que_t::iterator iterEnd = m_recQueue.end();
     HDCAP* item = NULL;

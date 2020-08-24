@@ -12,7 +12,7 @@ LDLIBS = -lopencv_core -lopencv_imgcodecs -lpthread \
 		-L /usr/local/opt/sdl2/lib 
 
 OBJS = main.o VPS.o \
-		com_onycom_vps_VPSNativeLib.o \
+		com_onycom_vps_VPSNativeLib.o Callback_MemPool.o Callback_Queue.o \
 		NetManager.o AsyncMediaServerSocket.o ClientObject.o ClientList.o Mirroring.o \
 		MIR_Client.o MIR_MemPool.o MIR_Queue.o MIR_QueueHandler.o VPSJpeg.o VPSCommon.o \
 		Timer.o Mutex.o VPSLogger.o Rec_MemPool.o Rec_Queue.o VideoRecorder.o
@@ -22,14 +22,20 @@ $(TARGET): $(OBJS)
 #	$(CC) -O2 -o $@ $(OBJS) $(LDLIBS)
 	rm -f *.o
 
-com_onycom_vps_VPSNativeLib.o: com_onycom_vps_VPSNativeLib.cpp
-	$(CC) -fPIC -c com_onycom_vps_VPSNativeLib.cpp $(CPPFLAGS) $(JNI_INC) 
-
 main.o: main.cpp
 	$(CC) -c main.cpp $(CPPFLAGS)
 
 VPS.o: VPS.cpp
 	$(CC) -c VPS.cpp $(CPPFLAGS)
+
+com_onycom_vps_VPSNativeLib.o: javaui/com_onycom_vps_VPSNativeLib.cpp
+	$(CC) -fPIC -c javaui/com_onycom_vps_VPSNativeLib.cpp $(CPPFLAGS) $(JNI_INC) 
+
+Callback_MemPool.o: javaui/Callback_MemPool.cpp
+	$(CC) -c javaui/Callback_MemPool.cpp $(CPPFLAGS)
+
+Callback_Queue.o: javaui/Callback_Queue.cpp
+	$(CC) -c javaui/Callback_Queue.cpp $(CPPFLAGS)
 
 NetManager.o: network/NetManager.cpp
 	$(CC) -c network/NetManager.cpp $(CPPFLAGS) $(OPENCV_INC)

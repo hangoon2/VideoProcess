@@ -1,19 +1,38 @@
 #include "VPS.h"
 
-// static VPS* gs_pVps = NULL;
+#include <pthread.h>
+#include <string.h>
+#include <sys/shm.h>
 
-// void Callback_AddLog(int nHpNo, const char* log) {
-//     if(gs_pVps != NULL) {
-//         gs_pVps->AddLog(nHpNo, log);
-//     }
-// }
+#if ENABLE_JAVA_UI
+static VPS* gs_pVps = NULL;
+static bool gs_isRunnging = true;
+static char gs_log[128] = {0,};
 
-#if ENABLE_UI
+void* VPSStartThreadFuc(void* pArg) {
+    NetManager* pNetMgr = (NetManager*)pArg;
+    if(pNetMgr != NULL) {
+        pNetMgr->OnServerModeStart();
+    }
+
+    return NULL;
+}
+
+void NativeLogCallback(int nHpNo, const char* log, vps_log_target_t nTarget) {
+    if(nTarget == LOG_TO_UI || nTarget == LOG_TO_BOTH) {
+        if(gs_pVps != NULL) {
+            gs_pVps->UpdateLog(log);
+        }
+    }
+}
+#endif
+
+#if ENABLE_NATIVE_UI
 const SDL_Color DEFAULT_TEXT_COLOR{0, 0, 0};
 #endif
 
 VPS::VPS() {
-#if ENABLE_UI
+#if ENABLE_NATIVE_UI
     m_window = NULL;
     m_renderer = NULL;
     m_texture = NULL;
@@ -25,10 +44,20 @@ VPS::VPS() {
 
     CreateWindow();
 #endif
+
+#if ENABLE_JAVA_UI
+    m_isUpdateLog = false;
+    m_shmid = -1;
+    m_shared_memory = (void *)0;
+
+    CreateSharedMemory();
+
+    gs_pVps = this;
+#endif
 }
 
 VPS::~VPS() {
-#if ENABLE_UI
+#if ENABLE_NATIVE_UI
     if(m_font != NULL) {
         TTF_CloseFont(m_font);
     }
@@ -48,10 +77,111 @@ VPS::~VPS() {
     SDL_Quit();
     TTF_Quit();
 #endif
+
+#if ENABLE_JAVA_UI
+
+    DestroySharedMemory();
+
+#endif
 }
 
+#if ENABLE_JAVA_UI
+void VPS::Start() {
+    m_pNetMgr = new NetManager(NativeLogCallback);
+
+    pthread_t tID;
+    pthread_create(&tID, NULL, &VPSStartThreadFuc, m_pNetMgr);
+}
+
+void VPS::Stop() {
+    if(m_pNetMgr != NULL) {
+        m_pNetMgr->OnDestroy();
+
+        delete m_pNetMgr;
+        m_pNetMgr = NULL;
+    }
+}
+
+void VPS::UpdateLog(const char* log) {
+    m_lock.Lock();
+
+    memset( m_log, 0x00, sizeof(m_log) );
+    strcpy(m_log, log);
+    m_isUpdateLog = true;
+
+    m_lock.Unlock();
+}
+
+bool VPS::GetLastLog(char* log) {
+    bool ret = false;
+
+    m_lock.Lock();
+
+    if(m_isUpdateLog) {
+        strcpy(log, m_log);
+
+        m_isUpdateLog = false;
+        ret = true;
+    }
+
+    m_lock.Unlock();
+
+    return ret;
+}
+
+int VPS::GetLastScene(int nHpNo, BYTE* pDstJpg) {
+    if(m_pNetMgr != NULL) {
+        return m_pNetMgr->GetLastScene(nHpNo, pDstJpg);
+    }
+
+    return 0;
+}
+
+bool VPS::IsOnService(int nHpNo) {
+    if(m_pNetMgr != NULL) {
+        return m_pNetMgr->IsOnService(nHpNo);
+    }
+
+    return false;
+}
+
+void VPS::CreateSharedMemory() {
+    HDCAP* pCap= NULL;
+    
+	// 공유메모리 공간을 만든다.
+	m_shmid = shmget((key_t)SAHRED_MEMORY_KEY, sizeof(HDCAP) * MEM_SHARED_MAX_COUNT, 0666 | IPC_CREAT);
+	if(m_shmid == -1) {
+		perror("shmget failed : ");
+		return;
+	}
+
+	// 공유메모리를 사용하기 위해 프로세스메모리에 붙인다. 
+	m_shared_memory = shmat(m_shmid, (void*)0, 0);
+	if (m_shared_memory == (void*)-1) {
+		perror("shmat failed : ");
+		return;
+	}
+
+	pCap = (HDCAP*)m_shared_memory;
+
+    for(int i = 0 ;i < MEM_SHARED_MAX_COUNT; i++){
+        memset( &pCap[i], 0x00, sizeof(HDCAP) );
+    }
+}
+void VPS::DestroySharedMemory() {
+    if(m_shared_memory != NULL) {
+        shmdt(m_shared_memory);
+    }
+
+    if(m_shmid != -1) {
+        shmctl(m_shmid, IPC_RMID, 0);
+    }
+}
+#endif
+
+#if ENABLE_NATIVE_UI
+
 void VPS::ShowWindow() {
-#if ENABLE_UI
     SDL_Event event;
 
     SDL_StartTextInput();
@@ -70,11 +200,9 @@ void VPS::ShowWindow() {
     }
 
     SDL_StopTextInput();
-#endif
 }
 
 void VPS::CreateWindow() {
-#if ENABLE_UI
     m_window = SDL_CreateWindow("VPS", 
                                 100, 
                                 100, 
@@ -89,11 +217,9 @@ void VPS::CreateWindow() {
     m_texture = SDL_CreateTextureFromSurface(m_renderer, NULL);
 
     m_font = TTF_OpenFont("FreeSans.ttf", 12);
-#endif
 }
 
 void VPS::RenderText() {
-#if ENABLE_UI
     if(m_font != NULL) {
         int size = TTF_FontAscent(m_font);
 
@@ -118,8 +244,9 @@ void VPS::RenderText() {
 
         printf("Render Text : %d, %d\n", size, outline);
     }
-#endif
 }
+
+#endif
 
 // VPS::VPS()
 // : m_vBox(Gtk::ORIENTATION_VERTICAL) {
