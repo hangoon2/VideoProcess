@@ -13,9 +13,12 @@
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
+#include <signal.h>
 
 const int kReadEvent = 1;
 //const int kWriteEvent = 2;
+
+static int gs_pid = -1;
 
 AsyncMediaServerSocket::AsyncMediaServerSocket() {
     m_serverSock = INVALID_SOCKET;
@@ -23,11 +26,10 @@ AsyncMediaServerSocket::AsyncMediaServerSocket() {
     m_pNetMgr = NULL;
 
     m_isRunServer = true;
+    m_isClosed = false;
 }
 
 AsyncMediaServerSocket::~AsyncMediaServerSocket() {
-    m_clientList.Clear();
-
     m_isRunServer = false;
 
     if(m_serverSock != INVALID_SOCKET) {
@@ -161,6 +163,8 @@ void AsyncMediaServerSocket::OnRead(int efd, Socket sock) {
 bool AsyncMediaServerSocket::OnClose(Socket sock) {
     ClientObject* pClient = m_clientList.Find(sock);
     if(pClient != NULL) {  
+        if(pClient->m_isClosing) return false;
+
         pClient->m_isClosing = true;
 
         // close socket
@@ -407,13 +411,50 @@ int AsyncMediaServerSocket::InitSocket(void* pNetMgr, int port) {
 
     ((NetManager*)m_pNetMgr)->AddLog(0, "VPS 초기화 완료", LOG_TO_BOTH); 
 
+    gs_pid = getpid();
+
     while(m_isRunServer) {
         if( !OnServerEvent(m_queueID, m_serverSock, 10000) ) {
             break;
         }
     }
 
+    m_isClosed = true;
+    printf("SERVER THREAD STOP OK\n");
+
     return 0;
+}
+
+void AsyncMediaServerSocket::DestSocket() {
+    ClientObject* pMobileController = m_clientList.GetMobileController();
+    if(pMobileController != NULL) {
+        OnClose(pMobileController->m_clientSock);
+    }
+
+    m_isRunServer = false;
+    if(gs_pid != -1) {
+        kill(gs_pid, SIGINT);
+    }
+
+    if(m_serverSock != INVALID_SOCKET) {
+        printf("[VPS:0] Closed Listening Server\n");
+        UpdateEvents(m_queueID, m_serverSock, kReadEvent, true);
+
+        shutdown(m_serverSock, SHUT_RDWR);
+        close(m_serverSock);
+        m_serverSock = INVALID_SOCKET;
+    }
+
+    int count = 0;
+    while(!m_isClosed) {
+        sleep(1);
+
+        count++;
+
+        if(count == 20) break;
+    }
+
+    printf("CLOSE SERVER OK\n");
 }
 
 ClientObject* AsyncMediaServerSocket::Find(Socket sock) {
@@ -463,10 +504,8 @@ void AsyncMediaServerSocket::CloseAllGuest(int nHpNo) {
 }
 
 void AsyncMediaServerSocket::DeleteClient(ClientObject* pClient) {
-    int nHpNo = pClient->m_nHpNo;
     m_clientList.Delete(pClient->m_clientSock);
 
     delete pClient;
     pClient = NULL;
-//    printf("============== DELETE CLIENT ============== %d\n", nHpNo);
 }

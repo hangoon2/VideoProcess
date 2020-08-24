@@ -41,6 +41,9 @@ typedef unsigned long       DWORD;
 
 #define RECORDING_TIME              (30 * 60 * 1000)
 
+#define MIR_DEFAULT_MEM_POOL_UINT           (1024 * 1024)
+#define MIR_DEFAULT_MEM_POOL_UNIT_COUNT     30
+
 #define VPS_DEFAULT_JPG_QUALITY     70
 #define VPS_CAPTURE_JPG_QUALITY     90
 

@@ -26,8 +26,6 @@ private:
 
     pthread_t m_tID;
 
-    bool m_isThreadReady;
-    bool m_doExitThread;
     bool m_isThreadRunning;
 };
 

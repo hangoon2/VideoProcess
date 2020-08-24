@@ -16,7 +16,7 @@ public:
     bool SaveJpeg(char* filePath, BYTE* pJpgSrc, int nJpgSrcLen, int quality);
     bool Write_to_jpegfile(char* filename, BYTE* pJpgSrc, int width, int height, int quality);
 
-    BYTE* Decode_Jpeg(BYTE* pJpgSrc, int nJpgSrcLen, int width, int height);
+    BYTE* Decode_Jpeg(BYTE* pJpgSrc, int nJpgSrcLen);
 
 private:
     int Decode_Jpeg(BYTE* pJpgSrc, int nJpgSrcLen, BYTE* pOut);

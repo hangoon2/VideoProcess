@@ -14,7 +14,9 @@
 
 using namespace std;
 
+#if ENABLE_NONBLOCK_SOCKET
 const int kReadEvent = 1;
+#endif
 
 bool SetNonBlock(Socket sock) {
     int flags = fcntl(sock, F_GETFL, 0);
@@ -30,7 +32,7 @@ bool SetNonBlock(Socket sock) {
 
 void* ThreadFunc(void* pArg) {
     MIR_Client *pClient = (MIR_Client*)pArg;
-    int nHpNo = pClient->GetHpNo();
+//    int nHpNo = pClient->GetHpNo();
     int nMirrorPort = pClient->GetMirrorPort();
     int nControlPort = pClient->GetControlPort();
 
@@ -188,7 +190,6 @@ void* ThreadFunc(void* pArg) {
     // memory alloc : read buffer
         pClient->m_pRcvBuf = (BYTE*)malloc(RECV_BUF_SIZE);
 
-        int i = 0;
         while( !pClient->IsDoExitRunClientThread() ) {
             int ret = pClient->GetData();
             if(ret == -1 || ret == 0) {
@@ -266,7 +267,7 @@ bool MIR_Client::StartRunClientThread(int nHpNo, int nMirroringPort, int nContro
 
         SetRunClientThreadReady(false);
 
-        int r = pthread_create(&m_tID, NULL, &ThreadFunc, this);
+        pthread_create(&m_tID, NULL, &ThreadFunc, this);
         if(m_tID != NULL) {
             // while( !IsRunClientThreadReady() ) {
             //     sleep(1);
@@ -490,6 +491,7 @@ BYTE* MIR_Client::MakeOnyPacketOnOff(bool onoff, int& size) {
     return m_sendBuf;
 }
 
+#if ENABLE_NONBLOCK_SOCKET
 bool MIR_Client::GetData(int efd, Socket sock, int waitms) {
     struct timespec timeout;
     timeout.tv_sec = waitms / 1000;
@@ -499,20 +501,20 @@ bool MIR_Client::GetData(int efd, Socket sock, int waitms) {
     int n = kevent(efd, NULL, 0, activeEvs, kMaxEvents, &timeout);
 
     for(int i = 0; i < n; i++) {
-        Socket clientSock = (int)(intptr_t)activeEvs[i].udata;
+//        Socket clientSock = (int)(intptr_t)activeEvs[i].udata;
         int events = activeEvs[i].filter;
 
         if(events == EVFILT_READ) {
             char buf[4096];
-            int n = 0; 
+            int readLen = 0; 
 
-            while( (n = ::read(sock, buf, sizeof buf)) > 0 ) {
+            while( (readLen = ::read(sock, buf, sizeof buf)) > 0 ) {
                 int idx = 0;
                 int iWrite = 0;
-                while(idx < n) {
+                while(idx < readLen) {
                     if(m_rxStreamOrder == RX_PACKET_POS_START) {
                         // find start flag
-                        for(; idx < n; ++idx) {
+                        for(; idx < readLen; ++idx) {
                             if(buf[idx] == CMD_START_CODE) {
                                 m_rxStreamOrder = RX_PACKET_POS_HEAD;
                                 m_pos = 0;
@@ -522,7 +524,7 @@ bool MIR_Client::GetData(int efd, Socket sock, int waitms) {
                     }
 
                     if(m_rxStreamOrder == RX_PACKET_POS_HEAD) {
-                        iWrite = min(CMD_HEAD_SIZE - m_pos, n - idx);
+                        iWrite = min(CMD_HEAD_SIZE - m_pos, readLen - idx);
 
                         memcpy(m_pRcvBuf + m_pos, buf + idx, iWrite);
 
@@ -538,7 +540,7 @@ bool MIR_Client::GetData(int efd, Socket sock, int waitms) {
                     }
 
                     if(m_rxStreamOrder == RX_PACKET_POS_DATA) {
-                        iWrite = min(m_dataSize - m_pos, n - idx);
+                        iWrite = min(m_dataSize - m_pos, readLen - idx);
 
                         memcpy(m_pRcvBuf + CMD_HEAD_SIZE + m_pos, buf + idx, iWrite);
 
@@ -552,7 +554,7 @@ bool MIR_Client::GetData(int efd, Socket sock, int waitms) {
                     }
 
                     if(m_rxStreamOrder == RX_PACKET_POS_TAIL) {
-                        iWrite = min(CMD_TAIL_SIZE - m_pos, n - i);
+                        iWrite = min(CMD_TAIL_SIZE - m_pos, readLen - i);
 
                         memcpy(m_pRcvBuf + CMD_HEAD_SIZE + m_dataSize + m_pos, buf + idx, iWrite);
 
@@ -581,6 +583,7 @@ bool MIR_Client::GetData(int efd, Socket sock, int waitms) {
 
     return false;
 }
+#endif
 
 int MIR_Client::GetData() {
     int r = -2;

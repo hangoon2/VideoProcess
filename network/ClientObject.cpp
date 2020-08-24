@@ -33,11 +33,14 @@ ClientObject::~ClientObject() {
     if(m_clientSock != INVALID_SOCKET) {
         shutdown(m_clientSock, SHUT_RDWR);
         close(m_clientSock);
-    }
 
-    m_clientSock = INVALID_SOCKET;
+        m_clientSock = INVALID_SOCKET;
+    }
     
-    delete [] m_rcvCommandBuffer;
+    if(m_rcvCommandBuffer != NULL) {
+        delete [] m_rcvCommandBuffer;
+        m_rcvCommandBuffer = NULL;
+    }
 
     Unlock();
 }

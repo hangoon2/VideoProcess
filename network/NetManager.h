@@ -12,6 +12,7 @@ public:
     ~NetManager();
 
     void OnServerModeStart();
+    void OnDestroy();
 
     bool BypassPacket(void* pMirroringPacket);
     void OnMirrorStopped(int nHpNo, int nStopCode);
@@ -37,6 +38,8 @@ public:
     void StopVideoServiceIfNoClientExist();
     bool CloseClientManualEx(int nHpNo);
     void CloseClientManual(ClientObject* pClient);
+
+    int GetLastScene(int nHpNo, BYTE* pDstJpg);
 
     void AddLog(int nHpNo, const char* log, vps_log_target_t nTarget);
 
@@ -105,6 +108,10 @@ private:
     Timer m_timer_20;
 
     VPSLogger m_logger;
+
+    BYTE* m_currScene[MAXCHCNT];
+    int m_nSizeCurrScene[MAXCHCNT];
+    Mutex m_lockCurrenScene[MAXCHCNT];
 };
 
 #endif

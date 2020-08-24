@@ -58,19 +58,11 @@ void VideoRecorder::StartRecord(char* filePath) {
 #endif
 
     if( OpenEncoder(filePath) ) { 
-        int r = pthread_create(&m_tID, NULL, &RecordingThreadFunc, this);
-
-        if(m_tID != NULL) {
-        } else {
+        pthread_create(&m_tID, NULL, &RecordingThreadFunc, this);
+        if(m_tID == NULL) {
             printf("[VPS:0] Mirroring thread creation fail[%d]\n", errno);
         }
     }
-
-    // if(OpenEncoder(filePath)) {
-    //     thread([=]() {
-    //         OnRecord();    
-    //     }).detach();
-    // }
 }
 
 void VideoRecorder::StopRecord()
@@ -157,8 +149,6 @@ void VideoRecorder::OnRecord() {
     av_init_packet(&pkt);
 
     SetThreadRunning(true);
-
-    int count = 0;
 
     HDCAP* pFrame = (HDCAP*)malloc(sizeof(HDCAP));
     memset(pFrame, 0, sizeof(HDCAP));

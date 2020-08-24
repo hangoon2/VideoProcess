@@ -62,8 +62,7 @@ VPSJpeg::~VPSJpeg() {
 // }
 
 int VPSJpeg::RotateLeft(BYTE* pJpgSrc, int nJpgSrcLen, int quality, int width, int height) {
-//    ULONGLONG start = GetTickCount();
-    int ret = Decode_Jpeg(pJpgSrc, nJpgSrcLen, m_pRgbData);
+    Decode_Jpeg(pJpgSrc, nJpgSrcLen, m_pRgbData);
     Mat rgbImage(height, width, CV_8UC3, m_pRgbData);
 
     rotate(rgbImage, rgbImage, ROTATE_90_COUNTERCLOCKWISE);
@@ -71,20 +70,6 @@ int VPSJpeg::RotateLeft(BYTE* pJpgSrc, int nJpgSrcLen, int quality, int width, i
     // flip(rawImage, rawImage, 0);
 
     return Encode_Jpeg(rgbImage.data, pJpgSrc, quality, height, width);
-//    ULONGLONG end = GetTickCount();
-
-    // ULONGLONG start = GetTickCount();
-    // Mat rawData(1, nJpgSrcLen, CV_8SC1, (void*)pJpgSrc);
-    // Mat rawImage = imdecode(rawData, IMREAD_COLOR);
-    
-    // rotate(rawImage, rawImage, ROTATE_90_COUNTERCLOCKWISE);
-    
-    // int r = Encode(pJpgSrc, rawImage, quality);
-    // ULONGLONG end = GetTickCount();
-
-    // printf("ROTATE LEFT TIME : %lld\n", end - start);
-
-    // return r;
 }
 
 // int VPSJpeg::RotateRight(BYTE* pJpgSrc, int nJpgSrcLen, int quality) {
@@ -98,7 +83,7 @@ int VPSJpeg::RotateLeft(BYTE* pJpgSrc, int nJpgSrcLen, int quality, int width, i
 // }
 
 int VPSJpeg::RotateRight(BYTE* pJpgSrc, int nJpgSrcLen, int quality, int width, int height) {
-    int ret = Decode_Jpeg(pJpgSrc, nJpgSrcLen, m_pRgbData);
+    Decode_Jpeg(pJpgSrc, nJpgSrcLen, m_pRgbData);
     Mat rgbImage(height, width, CV_8UC3, m_pRgbData);
 
     rotate(rgbImage, rgbImage, ROTATE_90_CLOCKWISE);
@@ -130,7 +115,6 @@ bool VPSJpeg::SaveJpeg(char* filePath, BYTE* pJpgSrc, int nJpgSrcLen, int qualit
 int VPSJpeg::Decode_Jpeg(BYTE* pJpgSrc, int nJpgSrcLen, BYTE* pOut) {
     struct jpeg_decompress_struct cinfo;
     struct jpeg_error_mgr jerr;
-    unsigned long outLen = 0;
 
     cinfo.err = jpeg_std_error(&jerr);
 
@@ -138,7 +122,7 @@ int VPSJpeg::Decode_Jpeg(BYTE* pJpgSrc, int nJpgSrcLen, BYTE* pOut) {
 
     jpeg_mem_src(&cinfo, pJpgSrc, nJpgSrcLen);
 
-    int r = jpeg_read_header(&cinfo, TRUE);
+    jpeg_read_header(&cinfo, TRUE);
 
     jpeg_start_decompress(&cinfo);
 
@@ -249,7 +233,7 @@ bool VPSJpeg::Write_to_jpegfile(char* filename, BYTE* pJpgSrc, int width, int he
     return true;
 }
 
-BYTE* VPSJpeg::Decode_Jpeg(BYTE* pJpgSrc, int nJpgSrcLen, int width, int height) {
-    int ret = Decode_Jpeg(pJpgSrc, nJpgSrcLen, m_pRgbData); 
+BYTE* VPSJpeg::Decode_Jpeg(BYTE* pJpgSrc, int nJpgSrcLen) {
+    Decode_Jpeg(pJpgSrc, nJpgSrcLen, m_pRgbData); 
     return m_pRgbData;
 }

@@ -202,16 +202,14 @@ void Mirroring::HandleJpegPacket(BYTE* pPacket, int iDataLen, short usCmd, int n
             *(short*)&pPacket[5] = htons(usCmd);
         }
 
-        // 전체 패킷 길이
-        int dwTotLen = CMD_HEAD_SIZE + iDataLen + CMD_TAIL_SIZE;
+        // // 전체 패킷 길이
+        // int dwTotLen = CMD_HEAD_SIZE + iDataLen + CMD_TAIL_SIZE;
 
         // JPEG 회전을 위한 코드
         BYTE* pJpgData = pPacket + 25;
         int nJpgDataSize = iDataLen - 17;
 
         if( (usCmd == CMD_JPG_DEV_HORI_IMG_HORI || usCmd == CMD_JPG_DEV_HORI_IMG_VERT) && !isWideDevice ) {
-//            VPSJpeg vpsJpeg;
-
             int nNewJpgDataSize = gs_mirJpeg[nHpNo - 1].RotateLeft( pJpgData, nJpgDataSize, m_nJpgQuality[nHpNo - 1], (nRight - nLeft), (nBottom - nTop) );
             if(nNewJpgDataSize > 0) {
                 *(short*)&pPacket[16] = htons(nTop);
@@ -226,8 +224,6 @@ void Mirroring::HandleJpegPacket(BYTE* pPacket, int iDataLen, short usCmd, int n
                 *&pPacket[CMD_HEAD_SIZE + iDataLen + CMD_TAIL_SIZE - 1] = CMD_END_CODE;
             }
         } else if( usCmd == CMD_JPG_DEV_VERT_IMG_VERT && isWideDevice ) {
-//            VPSJpeg vpsJpeg;
-
             int nNewJpgDataSize = gs_mirJpeg[nHpNo - 1].RotateLeft( pJpgData, nJpgDataSize, m_nJpgQuality[nHpNo - 1], (nRight - nLeft), (nBottom - nTop) );
             if(nNewJpgDataSize > 0) {
                 *(short*)&pPacket[16] = htons(nTop);
@@ -242,8 +238,6 @@ void Mirroring::HandleJpegPacket(BYTE* pPacket, int iDataLen, short usCmd, int n
                 *&pPacket[CMD_HEAD_SIZE + iDataLen + CMD_TAIL_SIZE - 1] = CMD_END_CODE;
             }
         } else if( usCmd == CMD_JPG_DEV_VERT_IMG_HORI && isWideDevice ) {
-//            VPSJpeg vpsJpeg;
-
             int nNewJpgDataSize = gs_mirJpeg[nHpNo - 1].RotateRight( pJpgData, nJpgDataSize, m_nJpgQuality[nHpNo - 1], (nRight - nLeft), (nBottom - nTop) );
             if(nNewJpgDataSize > 0) {
                 *(short*)&pPacket[16] = htons(nShorterKeyFrameLength - nBottom);
@@ -307,8 +301,6 @@ void Mirroring::SendControlPacket(int nHpNo, BYTE* pData, int len) {
 
 void Mirroring::SetDeviceOrientation(int nHpNo, int deviceOrientation) {
     m_nDeviceOrientation[nHpNo - 1] = deviceOrientation;
-
-//    printf("[VPS:%d] 영상 %s 모드 출력\n", nHpNo, deviceOrientation == 1 ? "세로" : "가로");
 }
 
 void Mirroring::EnQueue(int nHpNo, BYTE* pPacket) {

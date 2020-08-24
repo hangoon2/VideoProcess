@@ -143,7 +143,7 @@ void GetPrivateProfileString(const char* section, const char* key, const char* d
         bool findKey = false;
 
         while( file.getline(line, sizeof(line) ) ) {
-            int ret = strncmp( line, section, strlen(section) );
+//            int ret = strncmp( line, section, strlen(section) );
             if( strncmp( line, section, strlen(section) ) == 0 ) {
                 findSection = true;
             }

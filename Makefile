@@ -1,23 +1,29 @@
-CC=g++
-TARGET=vps
-CPPFLAGS=--std=c++11
-#GTK_FLAGS=`pkg-config gtkmm-3.0 --cflags`
-#GTK_LIBS=`pkg-config gtkmm-3.0 --libs`
-#OPENCV_FLAGS=`pkg-config opencv4 --cflags`
-OPENCV_INC=-I /usr/local/include/opencv4
-JPEG_INC=-I /usr/local/opt/jpeg-turbo/include
-GLOG_INC=-I /usr/local/opt/glog/include
+CC = g++
+TARGET = libVPSNativeLib.dylib
+CPPFLAGS = --std=c++11
+JNI_INC = -I $(JAVA_HOME)/include -I $(JAVA_HOME)/include/darwin
+OPENCV_INC = -I /usr/local/include/opencv4
+JPEG_INC = -I /usr/local/opt/jpeg-turbo/include
+GLOG_INC = -I /usr/local/opt/glog/include
 
-LDLIBS=-L /usr/local/lib -lopencv_core -lopencv_imgcodecs -lpthread \
-		-lavformat -lavcodec -lavutil -lswscale -lglog -L /usr/local/opt/jpeg-turbo/lib -lturbojpeg
+LDLIBS = -lopencv_core -lopencv_imgcodecs -lpthread \
+		-lavformat -lavcodec -lavutil -lswscale -lglog \
+		-L /usr/local/opt/jpeg-turbo/lib -lturbojpeg \
+		-L /usr/local/opt/sdl2/lib 
 
-OBJS=main.o VPS.o NetManager.o AsyncMediaServerSocket.o ClientObject.o ClientList.o Mirroring.o \
+OBJS = main.o VPS.o \
+		com_onycom_vps_VPSNativeLib.o \
+		NetManager.o AsyncMediaServerSocket.o ClientObject.o ClientList.o Mirroring.o \
 		MIR_Client.o MIR_MemPool.o MIR_Queue.o MIR_QueueHandler.o VPSJpeg.o VPSCommon.o \
 		Timer.o Mutex.o VPSLogger.o Rec_MemPool.o Rec_Queue.o VideoRecorder.o
 
 $(TARGET): $(OBJS)
-	$(CC) -o $@ $(OBJS) $(LDLIBS)
+	$(CC) -shared -O2 -o $@ $(OBJS) $(LDLIBS)
+#	$(CC) -O2 -o $@ $(OBJS) $(LDLIBS)
 	rm -f *.o
+
+com_onycom_vps_VPSNativeLib.o: com_onycom_vps_VPSNativeLib.cpp
+	$(CC) -fPIC -c com_onycom_vps_VPSNativeLib.cpp $(CPPFLAGS) $(JNI_INC) 
 
 main.o: main.cpp
 	$(CC) -c main.cpp $(CPPFLAGS)

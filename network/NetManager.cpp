@@ -49,20 +49,20 @@ void DoMirrorStoppedCallback(int nHpNo, int nStopCode) {
     }
 }
 
-bool DoMirrorRecordCallback(void* pMirroringPacket) {
-    // if(pNetMgr != NULL) {
-    //     BYTE* pPacket = (BYTE*)pMirroringPacket;
+// bool DoMirrorRecordCallback(void* pMirroringPacket) {
+//     // if(pNetMgr != NULL) {
+//     //     BYTE* pPacket = (BYTE*)pMirroringPacket;
 
-    //     int iDataLen = ntohl( *(uint32_t*)&pPacket[1] );
-    //     short usCmd = ntohs( *(short*)&pPacket[5] );
-    //     int nHpNo = *(&pPacket[7]);
-    //     bool isKeyFrame = *&pPacket[24] == 1 ? true : false;
+//     //     int iDataLen = ntohl( *(uint32_t*)&pPacket[1] );
+//     //     short usCmd = ntohs( *(short*)&pPacket[5] );
+//     //     int nHpNo = *(&pPacket[7]);
+//     //     bool isKeyFrame = *&pPacket[24] == 1 ? true : false;
 
-    //     pNetMgr->DoMirrorVideoRecording(nHpNo, usCmd, isKeyFrame, pPacket, iDataLen);
-    // }
+//     //     pNetMgr->DoMirrorVideoRecording(nHpNo, usCmd, isKeyFrame, pPacket, iDataLen);
+//     // }
 
-    return false;
-}
+//     return false;
+// }
 
 void DoAddLogCallback(int nHpNo, const char* log, vps_log_target_t nTarget) {
     if(pNetMgr != NULL) {
@@ -118,6 +118,9 @@ NetManager::NetManager(PVPS_ADD_LOG_ROUTINE fnAddLog) {
 
         gs_recorder[i] = new VideoRecorder(gs_sharedMem, i + 1, m_serverPort);
         gs_lastScene[i].create(960, 960, CV_8UC3);
+
+        m_currScene[i] = (BYTE*)malloc(MIR_DEFAULT_MEM_POOL_UINT);
+        m_nSizeCurrScene[i] = 0;
     }
 
     memset( m_strAviSavePath, 0x00, sizeof(m_strAviSavePath) );
@@ -131,19 +134,13 @@ NetManager::NetManager(PVPS_ADD_LOG_ROUTINE fnAddLog) {
     m_timer_15.Start(TIMERID_15SEC, OnTimer);
     m_timer_20.Start(TIMERID_20SEC, OnTimer);
 
-    m_mirror.Initialize(DoMirrorRecordCallback, DoAddLogCallback);
+    m_mirror.Initialize(NULL, DoAddLogCallback);
+
+    printf("Network Manager Create\n");
 }
 
 NetManager::~NetManager() {
-    m_timer_1.Stop();
-    m_timer_10.Stop();
-    m_timer_15.Stop();
-    m_timer_20.Stop();
-
-    for(int i = 0; i < MAXCHCNT; i++) {
-        delete gs_recorder[i];
-        gs_recorder[i] = NULL;
-    }
+    printf("Network Manager Destroy\n");
 
     AddLog(0, "VPS 종료", LOG_TO_FILE);
 }
@@ -155,6 +152,35 @@ void NetManager::OnServerModeStart() {
     if(server < 0) {
         AddLog(0, "Media Server Socket 생성 실패", LOG_TO_FILE);
     }
+}
+
+void NetManager::OnDestroy() {
+    for(int i = 0; i < MAXCHCNT; i++) {
+        if(m_isOnService[i]) {
+            m_isOnService[i] = false;
+
+            CloseClientManualEx(i + 1);
+
+            usleep(1);
+        }
+
+        delete gs_recorder[i];
+        gs_recorder[i] = NULL;
+
+        usleep(1);
+
+        if(m_currScene[i] != NULL) {
+            free(m_currScene[i]);
+            m_currScene[i] = NULL;
+        }
+    }
+
+    m_timer_1.Stop();
+    m_timer_10.Stop();
+    m_timer_15.Stop();
+    m_timer_20.Stop();
+
+    m_VPSSvr.DestSocket();
 }
 
 bool NetManager::BypassPacket(void* pMirroringPacket) {
@@ -305,14 +331,23 @@ void NetManager::ClientConnected(ClientObject* pClient) {
 }
 
 void NetManager::ClientDisconnected(ClientObject* pClient) {
-    m_isToSkipFailureReport[pClient->m_nHpNo - 1] = false;
+    int nHpNo = pClient->m_nHpNo;
+
+    m_isToSkipFailureReport[nHpNo - 1] = false;
 
     // const char* strClientType = pClient->GetClientTypeString();
     // printf("[VPS:%d] %s is disconnected.\n", pClient->m_nHpNo, strClientType);
 
+    m_lockCurrenScene[nHpNo - 1].Lock();
+
+    memset(m_currScene[nHpNo - 1], 0x00, MIR_DEFAULT_MEM_POOL_UINT);
+    m_nSizeCurrScene[nHpNo - 1] = 0;
+
+    m_lockCurrenScene[nHpNo - 1].Unlock();
+
     char log[128] = {0,};
     sprintf(log, "%s is disconnected.", pClient->GetClientTypeString());
-    AddLog(pClient->m_nHpNo, log, LOG_TO_BOTH);  
+    AddLog(nHpNo, log, LOG_TO_BOTH);  
 }
 
 void NetManager::DeviceRotate(int nHpNo, bool portrait) {
@@ -532,7 +567,7 @@ void NetManager::Record(int nHpNo, bool start) {
 
         sprintf(filePath, "%s/%d/%s", m_strAviSavePath, nHpNo, gs_recordFileName[nHpNo - 1]);
 
-        is_RectReady[nHpNo - 1] = false;
+//        is_RectReady[nHpNo - 1] = false;
 
         gs_recorder[nHpNo - 1]->StartRecord(filePath);
 
@@ -609,47 +644,54 @@ bool NetManager::DoMirrorVideoRecording(int nHpNo, short usCmd, bool isKeyFrame,
         JPGCaptureAndSend(nHpNo, pJpgSrc, nJpgSrcLen);
     } 
 
-    BYTE* pDecodeData = gs_mirJpeg[nHpNo - 1].Decode_Jpeg( pJpgSrc, nJpgSrcLen, (nRight - nLeft), (nBottom - nTop) );
-    Mat rawImage((nBottom - nTop), (nRight - nLeft), CV_8UC3, pDecodeData);
-
-    int startPt = (gs_nLogerKeyFrameLength[nHpNo - 1] - gs_nShorterKeyFrameLength[nHpNo - 1]) / 2;
-
     if(isKeyFrame) {
-        if(usCmd == CMD_JPG_DEV_VERT_IMG_VERT) {
-            rect.x = startPt;
-            rect.y = 0;
-            rect.width = nRight - nLeft;
-            rect.height = nBottom - nTop;
-        } else if(usCmd == CMD_JPG_DEV_HORI_IMG_HORI) {
-            rect.x = 0;
-            rect.y = startPt;
-            rect.width = nRight - nLeft;
-            rect.height = nBottom - nTop;
-        }
-    } else {
-        if(usCmd == CMD_JPG_DEV_VERT_IMG_VERT) {
-            rect.x = startPt + nLeft;
-            rect.y = nTop;
-            rect.width = nRight - nLeft;
-            rect.height = nBottom - nTop;
-        } else if(usCmd == CMD_JPG_DEV_HORI_IMG_HORI) {
-            rect.x = nLeft;
-            rect.y = startPt + nTop;
-            rect.width = nRight - nLeft;
-            rect.height = nBottom - nTop;
-        }
+        m_lockCurrenScene[nHpNo - 1].Lock();
+
+        memcpy(m_currScene[nHpNo - 1], pJpgSrc, nJpgSrcLen);
+        m_nSizeCurrScene[nHpNo - 1] = nJpgSrcLen;
+
+        m_lockCurrenScene[nHpNo - 1].Unlock();
     }
 
-    Mat imageROI(gs_lastScene[nHpNo - 1], rect);
-    rawImage.copyTo(imageROI);
+    if(is_RectReady[nHpNo - 1]) {
+        BYTE* pDecodeData = gs_mirJpeg[nHpNo - 1].Decode_Jpeg(pJpgSrc, nJpgSrcLen);
+        Mat rawImage((nBottom - nTop), (nRight - nLeft), CV_8UC3, pDecodeData);
 
-    if(!isKeyFrame && !is_RectReady[nHpNo - 1]) {
-        return false;
-    }
+        int startPt = (gs_nLogerKeyFrameLength[nHpNo - 1] - gs_nShorterKeyFrameLength[nHpNo - 1]) / 2;
 
-    if( gs_recorder[nHpNo - 1]->EnQueue(gs_lastScene[nHpNo - 1].data) ) {
-        // compress count 업데이트
-        m_iCompressedCount[nHpNo - 1]++;
+        if(isKeyFrame) {
+            if(usCmd == CMD_JPG_DEV_VERT_IMG_VERT) {
+                rect.x = startPt;
+                rect.y = 0;
+                rect.width = nRight - nLeft;
+                rect.height = nBottom - nTop;
+            } else if(usCmd == CMD_JPG_DEV_HORI_IMG_HORI) {
+                rect.x = 0;
+                rect.y = startPt;
+                rect.width = nRight - nLeft;
+                rect.height = nBottom - nTop;
+            }
+        } else {
+            if(usCmd == CMD_JPG_DEV_VERT_IMG_VERT) {
+                rect.x = startPt + nLeft;
+                rect.y = nTop;
+                rect.width = nRight - nLeft;
+                rect.height = nBottom - nTop;
+            } else if(usCmd == CMD_JPG_DEV_HORI_IMG_HORI) {
+                rect.x = nLeft;
+                rect.y = startPt + nTop;
+                rect.width = nRight - nLeft;
+                rect.height = nBottom - nTop;
+            }
+        }
+
+        Mat imageROI(gs_lastScene[nHpNo - 1], rect);
+        rawImage.copyTo(imageROI);
+
+        if( gs_recorder[nHpNo - 1]->EnQueue(gs_lastScene[nHpNo - 1].data) ) {
+            // compress count 업데이트
+            m_iCompressedCount[nHpNo - 1]++;
+        }
     }
 
     return true;
@@ -1282,29 +1324,44 @@ void NetManager::UpdateState(int id) {
     }
 }
 
+int NetManager::GetLastScene(int nHpNo, BYTE* pDstJpg) {
+    int ret = 0;
+
+    if(m_isOnService[nHpNo - 1]) {
+        m_lockCurrenScene[nHpNo - 1].Lock();
+
+        memcpy(pDstJpg, m_currScene[nHpNo - 1], m_nSizeCurrScene[nHpNo - 1]);
+        ret = m_nSizeCurrScene[nHpNo - 1];
+
+        m_lockCurrenScene[nHpNo - 1].Unlock();
+    }
+
+    return ret;
+}
+
 void NetManager::AddLog(int nHpNo, const char* log, vps_log_target_t nTarget) {
     if(m_fnAddLog != NULL) {
         m_fnAddLog(nHpNo, log, nTarget);
-    } else {
-        char prefix[64] = {0,};
-        char logText[512] = {0,};
+    } 
+    
+    char prefix[64] = {0,};
+    char logText[512] = {0,};
 
-        SYSTEM_TIME stTime;
-        GetLocalTime(stTime);
+    SYSTEM_TIME stTime;
+    GetLocalTime(stTime);
 
-        sprintf(prefix, "[%04d%02d%02d %02d:%02d:%02d:%03d]", 
-                            stTime.year, stTime.month, stTime.day, 
-                            stTime.hour, stTime.minute, stTime.second, stTime.millisecond);
+    sprintf(prefix, "[%04d%02d%02d %02d:%02d:%02d:%03d]", 
+                        stTime.year, stTime.month, stTime.day, 
+                        stTime.hour, stTime.minute, stTime.second, stTime.millisecond);
 
-        sprintf(logText, "[VPS:%d] %s\n", nHpNo, log);
+    sprintf(logText, "[VPS:%d] %s\n", nHpNo, log);
 
-        if(nTarget == LOG_TO_UI || nTarget == LOG_TO_BOTH) {
-            printf("%s", prefix);
-            printf(" %s", logText);
-        }
+    if(nTarget == LOG_TO_UI || nTarget == LOG_TO_BOTH) {
+        printf("%s", prefix);
+        printf(" %s", logText);
+    }
 
-        if(nTarget == LOG_TO_FILE || nTarget == LOG_TO_BOTH) {
-            m_logger.AddLog(logText);
-        }
+    if(nTarget == LOG_TO_FILE || nTarget == LOG_TO_BOTH) {
+        m_logger.AddLog(logText);
     }
 }

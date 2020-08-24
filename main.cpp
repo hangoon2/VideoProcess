@@ -1,6 +1,7 @@
 #include "network/NetManager.h"
 
 #include <stdio.h>
+#include <unistd.h>
 #include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
@@ -27,6 +28,8 @@ void ExitProgram() {
 #endif
 
     if(pNetMgr != NULL) {
+        pNetMgr->OnDestroy();
+
         delete pNetMgr;
         pNetMgr = NULL;
     }
@@ -40,13 +43,8 @@ void ExitProgram() {
         shmctl(shmid, IPC_RMID, 0);
     }
 #endif
-}
 
-void SigHandler(int sig) {
-    if(sig == SIGINT) {
-        ExitProgram();
-        exit(0);
-    }
+    printf("VPS 종료\n");
 }
 
 void* BackgroundThreadFunc(void* pArg) {
@@ -56,14 +54,7 @@ void* BackgroundThreadFunc(void* pArg) {
     return NULL;
 }
 
-void threadFunc() {
-    pNetMgr = new NetManager(NULL);
-    pNetMgr->OnServerModeStart();
-}
-
 int main(int argc, char *argv[]) {
-    signal(SIGINT, SigHandler);
-
 #if ENABLE_SHARED_MEMORY
 	HDCAP* pCap= NULL;
     
@@ -89,37 +80,16 @@ int main(int argc, char *argv[]) {
 #endif
 
 #if ENABLE_UI
-//    Glib::thread_init();
-
-    if(!Glib::thread_supported()) {
-        Glib::thread_init();
-    }
-
     pthread_create(&gs_tID, NULL, &BackgroundThreadFunc, NULL);
-
-    auto app = Gtk::Application::create(argc, argv, "com.onycom.vps");
-
-    // g_type_init();
-
-    // if(!g_thread_supported()) {
-    //     g_thread_init(NULL);
-    // }
-
-    // gdk_threads_init();
-    // gdk_threads_enter();
-
+    
     vps = new VPS();
-
-//    Glib::Thread::create(sigc::ptr_fun(&threadFunc), true);
-
-    int ret = app->run(*vps);
+    vps->ShowWindow();
 #else
     pNetMgr = new NetManager(NULL);
     pNetMgr->OnServerModeStart();
 #endif
 
     ExitProgram();
-    printf("EXIT PROGRAM\n");
 
     return 0;
 }

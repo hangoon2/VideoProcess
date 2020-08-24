@@ -11,6 +11,7 @@ public:
     ~AsyncMediaServerSocket();
 
     int InitSocket(void* pNetMgr, int port);
+    void DestSocket();
     bool OnClose(Socket sock);
     bool OnSend(ClientObject* pClient, BYTE* pData, int iLen, bool force);
 
@@ -40,6 +41,7 @@ private:
     void* m_pNetMgr;
 
     bool m_isRunServer;
+    bool m_isClosed;
 
     int m_queueID;
 };

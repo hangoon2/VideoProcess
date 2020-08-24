@@ -24,11 +24,10 @@ MIR_QueueHandler::~MIR_QueueHandler() {
 bool MIR_QueueHandler::StartThread(PMIRRORING_ROUTINE fnProcessPacket) {
     m_fnProcessPacket = fnProcessPacket;
 
-    int r = pthread_create(&m_tID, NULL, &HandlingThreadFunc, this);
-
-    if(m_tID != NULL) {
-    } else {
+    pthread_create(&m_tID, NULL, &HandlingThreadFunc, this);
+    if(m_tID == NULL) {
         printf("[VPS:0] Mirroring thread creation fail[%d]\n", errno);
+        return false;
     }
 
     return true;
@@ -43,7 +42,6 @@ void MIR_QueueHandler::StopThread() {
 void MIR_QueueHandler::QueueHandling() {
     m_isThreadRunning = true;
 
-    ULONGLONG count = 0;
     while(m_isThreadRunning) {
         if( m_mirQue.DeQueue(m_tempQueueItem) ) {
             m_fnProcessPacket(m_tempQueueItem);
