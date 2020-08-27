@@ -16,13 +16,19 @@ Rec_MemPool::Rec_MemPool() {
 }
 
 Rec_MemPool::~Rec_MemPool() {
+    m_mRecMemLock.Lock();
 
+    if(m_pHdCap) {
+        free(m_pHdCap);
+    }
+
+    m_mRecMemLock.Unlock();
 }
 
 void* Rec_MemPool::Alloc() {
     void* ret = nullptr;
 
-//    m_mRecMemLock.lock();
+    m_mRecMemLock.Lock();
 
     // 미리 할당된 메모리가 사용 전이면, 미리 할당된 메모리를 사용하고,
     // 그렇지 않으면, 새로운 메모리를 할당
@@ -41,7 +47,7 @@ void* Rec_MemPool::Alloc() {
         ret = malloc(sizeof(HDCAP));
     }
 
-//    m_mRecMemLock.unlock();
+    m_mRecMemLock.Unlock();
 
     return ret;
 }
@@ -51,7 +57,7 @@ void Rec_MemPool::Free(void *pMem) {
         return;
     }
 
-//    m_mRecMemLock.lock();
+    m_mRecMemLock.Lock();
 
     bool isFreed = false;
 
@@ -71,5 +77,5 @@ void Rec_MemPool::Free(void *pMem) {
         free(pMem);
     }
 
-//    m_mRecMemLock.unlock();
+    m_mRecMemLock.Unlock();
 }

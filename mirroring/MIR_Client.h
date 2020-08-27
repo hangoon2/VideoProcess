@@ -8,7 +8,7 @@
 // typedef bool (*PMIRRORING_ROUTINE)(void* pMirroringPacket);
 // typedef void (*PMIRRORING_STOP_ROUTINE)(int nHpNo, int nStopCode);
 
-#define RECV_BUF_SIZE   (1 * 1024 * 1024)
+#define RECV_BUF_SIZE   MAX_SIZE_JPEG_DATA
 
 enum {
     RX_PACKET_POS_START,

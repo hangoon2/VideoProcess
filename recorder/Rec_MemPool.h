@@ -2,6 +2,7 @@
 #define REC_MEMPOOL_H
 
 #include "../common/VPSCommon.h"
+#include "../common/Mutex.h"
 
 #define REC_DEFAULT_MEM_POOL_UNIT_COUNT 20
 
@@ -17,7 +18,7 @@ private:
     HDCAP* m_pHdCap;
     bool m_isAllocedFlag[REC_DEFAULT_MEM_POOL_UNIT_COUNT];
 
-//    QMutex m_mRecMemLock;
+    Mutex m_mRecMemLock;
 
     int m_nAllocedCount;
 };

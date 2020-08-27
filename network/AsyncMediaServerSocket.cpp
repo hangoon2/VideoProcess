@@ -92,7 +92,6 @@ void AsyncMediaServerSocket::UpdateEvents(int efd, Socket sock, int events, bool
     //     EV_SET(&ev[n++], sock, EVFILT_AIO, EV_DELETE, 0, 0, (void*)(intptr_t)sock);
     // }
 
-//    printf("%s Socket %d events read %d\n", modify ? "mod" : "add", sock, events & kReadEvent);
     kevent(efd, ev, 1, NULL, 0, NULL);
 }
 
@@ -136,7 +135,6 @@ void AsyncMediaServerSocket::OnAccept(int efd, ServerSocket serverSock) {
     int optval = 1;
     setsockopt( clientSock, IPPROTO_TCP, TCP_NODELAY, &optval, sizeof(optval) );
 
-//    printf("[VPS:0] Accept : %s\n", pClient->m_strIPAddr);
     char log[128] = {0,};
     sprintf(log, "Accept : %s", pClient->m_strIPAddr);
     ((NetManager*)m_pNetMgr)->AddLog(0, log, LOG_TO_FILE); 
@@ -156,7 +154,6 @@ void AsyncMediaServerSocket::OnRead(int efd, Socket sock) {
         return;
     }
  
-//    printf("=========> ON READ CALL ONCLOSE =====> \n");
     OnClose(sock);
 }
 
@@ -172,7 +169,6 @@ bool AsyncMediaServerSocket::OnClose(Socket sock) {
 
         shutdown(sock, SHUT_RDWR);
         close(sock);
-//        printf("[VPS:%d] Socket %d closed\n", pClient->m_nHpNo, sock);
 
         char log[128] = {0,};
         sprintf(log, "Socket Closed : %d", sock);
@@ -248,7 +244,7 @@ bool AsyncMediaServerSocket::OnClose(Socket sock) {
 }
 
 bool AsyncMediaServerSocket::OnSend(ClientObject* pClient, BYTE* pData, int iLen, bool force) {
-    if(iLen >= 1024 * 1024) {
+    if(iLen >= MAX_SIZE_JPEG_DATA) {
         printf("패킷 사이즈 너무 큼\n");
         return false;
     }
@@ -264,7 +260,6 @@ bool AsyncMediaServerSocket::OnSend(ClientObject* pClient, BYTE* pData, int iLen
         int nSendResult = send(sock, pData, iLen, 0);
         if(nSendResult == SOCKET_ERROR) {
             if(errno == EWOULDBLOCK) {
-//                printf("SOCKET BLOCKED\n");
                 usleep(1);
                 continue;
             } else {
@@ -277,37 +272,6 @@ bool AsyncMediaServerSocket::OnSend(ClientObject* pClient, BYTE* pData, int iLen
             return true;
         }
     }
-
-//    printf("SEND FAILED : %d\n", total);
-
-    // int nOffset = 0;
-    // int dataSize = iLen;
-
-    // for(int i = 0; i < 10; i++) {
-    //     int nSendResult = send(sock, pData + nOffset, dataSize, 0);
-    //     if(nSendResult == SOCKET_ERROR) {
-    //         if(errno == EWOULDBLOCK) {
-    //             usleep(1);
-    //             continue;
-    //         } else {
-    //             printf("Socket Send() Error : %d\n", errno);
-    //             return false;
-    //         }
-    //     } else {
-    //         nOffset += nSendResult;
-    //         dataSize -= nSendResult;
-
-    //         if(nOffset < iLen) {
-    //             continue;
-    //         }
-
-    //         return true;
-    //     }
-    // }
-
-    // int err = errno;
-    // if(err != 60)
-    //     printf("[VPS:%d] SEND DATA FAILED : %d / %d ===> %d\n", pClient->m_nHpNo, nOffset, iLen, err);
 
     return false;
 }
@@ -395,8 +359,6 @@ int AsyncMediaServerSocket::InitSocket(void* pNetMgr, int port) {
         return -1;
     }
 
-//    printf("[VPS:0] VPS Server listening at %d\n", port);
-
     char log[128] = {0,};
     sprintf(log, "VPS Server listening : %d", port);
     ((NetManager*)m_pNetMgr)->AddLog(0, log, LOG_TO_FILE); 
@@ -458,15 +420,39 @@ void AsyncMediaServerSocket::DestSocket() {
 }
 
 ClientObject* AsyncMediaServerSocket::Find(Socket sock) {
-    return m_clientList.Find(sock);
+    ClientObject* pClient = NULL;
+
+    m_mClientLock.Lock();
+
+    pClient = m_clientList.Find(sock);
+
+    m_mClientLock.Unlock();
+
+    return pClient;
 }
 
 ClientObject* AsyncMediaServerSocket::FindHost(int nHpNo) {
-    return m_clientList.FindHost(nHpNo);
+    ClientObject* pHost = NULL;
+
+    m_mClientLock.Lock();
+
+    pHost = m_clientList.FindHost(nHpNo);
+
+    m_mClientLock.Unlock();
+
+    return pHost;
 }
 
 ClientObject* AsyncMediaServerSocket::FindGuest(int nHpNo, char* id) {
-    return m_clientList.FindGuest(nHpNo, id);
+    ClientObject* pGuest = NULL;
+
+    m_mClientLock.Lock();
+
+    pGuest = m_clientList.FindGuest(nHpNo, id);
+
+    m_mClientLock.Unlock();
+
+    return pGuest;
 }
 
 ClientObject* AsyncMediaServerSocket::GetMobileController() {
@@ -474,15 +460,35 @@ ClientObject* AsyncMediaServerSocket::GetMobileController() {
 }
 
 ClientObject* AsyncMediaServerSocket::FindMonitor(int nHpNo) {
-    return m_clientList.FindMonitor(nHpNo);
+    ClientObject* pMonitor = NULL;
+
+    m_mClientLock.Lock();
+
+    pMonitor = m_clientList.FindMonitor(nHpNo);
+
+    m_mClientLock.Unlock();
+
+    return pMonitor;
 }
 
 void AsyncMediaServerSocket::UpdateClientList(ClientObject* pClient) {
+    m_mClientLock.Lock();
+
     m_clientList.UpdateClient(pClient);
+
+    m_mClientLock.Unlock();
 }
 
 ClientObject** AsyncMediaServerSocket::GetClientList(int nHpNo) {
-    return m_clientList.GetClientList(nHpNo);
+    ClientObject** pClientList = NULL;
+
+    m_mClientLock.Lock();
+
+    pClientList = m_clientList.GetClientList(nHpNo);
+
+    m_mClientLock.Unlock();
+
+    return pClientList;
 }
 
 void AsyncMediaServerSocket::CloseAllGuest(int nHpNo) {

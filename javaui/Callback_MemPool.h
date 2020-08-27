@@ -2,8 +2,9 @@
 #define CALLBACK_MEMPOOL_H
 
 #include "../common/VPSCommon.h"
+#include "../common/Mutex.h"
 
-#define REC_DEFAULT_MEM_POOL_UNIT_COUNT 20
+#define REC_DEFAULT_MEM_POOL_UNIT_COUNT 30
 
 class Callback_MemPool {
 public:
@@ -14,10 +15,12 @@ public:
     void Free(void* pMem);
 
 private:
-    HDCAP* m_pHdCap;
+    CALLBACK* m_pCallback;
     bool m_isAllocedFlag[REC_DEFAULT_MEM_POOL_UNIT_COUNT];
 
     int m_nAllocedCount;
+
+    Mutex m_mRecMemLock;
 };
 
 #endif 

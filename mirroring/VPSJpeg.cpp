@@ -12,54 +12,19 @@ using namespace std;
 
 extern "C" {
 #include <jpeglib.h>
-//#include <turbojpeg.h>
 }
 
 #include <setjmp.h>
 
-int Encode(BYTE* pJpgSrc, Mat& img, int quality) {
-    vector<uchar> buff;
-    vector<int> param = vector<int>(2);
-    param[0] = IMWRITE_JPEG_QUALITY;
-    param[1] = quality;
-
-    imencode(".jpg", img, buff, param);
-
-    memcpy( pJpgSrc, (const void*)reinterpret_cast<uchar*>(&buff[0]), buff.size() );
-
-    return buff.size();
-}
-
 VPSJpeg::VPSJpeg() {
-    m_pJpgData = (BYTE*)malloc(1024 * 1024);
-    m_pRgbData = (BYTE*)malloc(960 * 960 * 3);
+    m_pJpgData = (BYTE*)malloc(MAX_SIZE_JPEG_DATA);
+    m_pRgbData = (BYTE*)malloc(MAX_SIZE_RGB_DATA);
 }
 
 VPSJpeg::~VPSJpeg() {
     free(m_pJpgData);
     free(m_pRgbData);
 }
-
-// int VPSJpeg::RotateLeft(BYTE* pJpgSrc, int nJpgSrcLen, int quality) {
-//     ULONGLONG start = GetTickCount();
-//     Mat rawData(1, nJpgSrcLen, CV_8SC1, (void*)pJpgSrc);
-//     ULONGLONG ret1 = GetTickCount();
-//     Mat rawImage = imdecode(rawData, IMREAD_COLOR);
-//     ULONGLONG ret2 = GetTickCount();
-
-//     rotate(rawImage, rawImage, ROTATE_90_COUNTERCLOCKWISE);
-//     // transpose(rawImage, rawImage);
-//     // flip(rawImage, rawImage, 0);
-//     ULONGLONG ret3 = GetTickCount();
-//     return 0;
-
-//     // int r = Encode(pJpgSrc, rawImage, quality);
-//     // ULONGLONG ret4 = GetTickCount();
-
-//     // printf("SCREEN ROTATE TIME : %lld, %lld, %lld, %lld\n", (ret1 - start), (ret2 - ret1), (ret3 - ret2), (ret4 - ret3));
-
-//     // return r;
-// }
 
 int VPSJpeg::RotateLeft(BYTE* pJpgSrc, int nJpgSrcLen, int quality, int width, int height) {
     Decode_Jpeg(pJpgSrc, nJpgSrcLen, m_pRgbData);
@@ -72,16 +37,6 @@ int VPSJpeg::RotateLeft(BYTE* pJpgSrc, int nJpgSrcLen, int quality, int width, i
     return Encode_Jpeg(rgbImage.data, pJpgSrc, quality, height, width);
 }
 
-// int VPSJpeg::RotateRight(BYTE* pJpgSrc, int nJpgSrcLen, int quality) {
-//     Mat rawData(1, nJpgSrcLen, CV_8SC1, (void*)pJpgSrc);
-//     Mat rawImage = imdecode(rawData, IMREAD_COLOR);
-    
-//     transpose(rawImage, rawImage);
-//     flip(rawImage, rawImage, 1);
-    
-//     return Encode(pJpgSrc, rawImage, quality);
-// }
-
 int VPSJpeg::RotateRight(BYTE* pJpgSrc, int nJpgSrcLen, int quality, int width, int height) {
     Decode_Jpeg(pJpgSrc, nJpgSrcLen, m_pRgbData);
     Mat rgbImage(height, width, CV_8UC3, m_pRgbData);
@@ -93,23 +48,15 @@ int VPSJpeg::RotateRight(BYTE* pJpgSrc, int nJpgSrcLen, int quality, int width, 
     return Encode_Jpeg(rgbImage.data, pJpgSrc, quality, height, width);
 }
 
-bool VPSJpeg::SaveJpeg(char* filePath, BYTE* pJpgSrc, int nJpgSrcLen, int quality) {
-    Mat rawData = Mat(1, nJpgSrcLen, CV_8SC1, (void*)pJpgSrc).clone();
-    Mat rawImage = imdecode(rawData, IMREAD_COLOR);
+bool VPSJpeg::EncodeJpeg(char* filePath, BYTE* pJpgSrc, int nJpgSrcLen, int width, int height, int quality) {
+    Decode_Jpeg(pJpgSrc, nJpgSrcLen, m_pRgbData);
+    
+    return Write_to_jpegfile(filePath, m_pRgbData, width, height, quality);
+}
 
-    vector<uchar> buff;
-    vector<int> param = vector<int>(2);
-    param[0] = IMWRITE_JPEG_QUALITY;
-    param[1] = quality;
-
-    imencode(".jpg", rawImage, buff, param);
-
-    imwrite(filePath, rawImage);
-
-    rawData.release();
-    rawImage.release();
-
-    return true;
+BYTE* VPSJpeg::Decode_Jpeg(BYTE* pJpgSrc, int nJpgSrcLen) {
+    Decode_Jpeg(pJpgSrc, nJpgSrcLen, m_pRgbData); 
+    return m_pRgbData;
 }
 
 int VPSJpeg::Decode_Jpeg(BYTE* pJpgSrc, int nJpgSrcLen, BYTE* pOut) {
@@ -131,7 +78,6 @@ int VPSJpeg::Decode_Jpeg(BYTE* pJpgSrc, int nJpgSrcLen, BYTE* pOut) {
     int pixel_size = cinfo.output_components;
 
     unsigned long buf_size = width * height * pixel_size;
-//    printf("BUFFER SIZE : %d, %d, %d, %ld\n", width, height, pixel_size, buf_size);
 
     int row_stride = width * pixel_size;
 
@@ -162,7 +108,7 @@ int VPSJpeg::Encode_Jpeg(BYTE* pJpgSrc, BYTE* pOut, int quality, int width, int 
     cinfo.image_height = height;
     cinfo.input_components = 3;
     cinfo.in_color_space = JCS_EXT_RGB;
-//    cinfo.dct_method = JDCT_IFAST;
+    cinfo.dct_method = JDCT_IFAST;
 
     jpeg_set_defaults(&cinfo);
 
@@ -188,7 +134,7 @@ int VPSJpeg::Encode_Jpeg(BYTE* pJpgSrc, BYTE* pOut, int quality, int width, int 
     return (int)outLen;
 }
 
-bool VPSJpeg::Write_to_jpegfile(char* filename, BYTE* pJpgSrc, int width, int height, int quality) {
+bool VPSJpeg::Write_to_jpegfile(char* filename, BYTE* pRgbSrc, int width, int height, int quality) {
     struct jpeg_compress_struct cinfo;
     struct jpeg_error_mgr jerr;
     FILE* outfile;
@@ -207,6 +153,7 @@ bool VPSJpeg::Write_to_jpegfile(char* filename, BYTE* pJpgSrc, int width, int he
     cinfo.image_height = height;
     cinfo.input_components = 3;
     cinfo.in_color_space = JCS_EXT_RGB;
+    cinfo.dct_method = JDCT_IFAST;
 
     jpeg_set_defaults(&cinfo);
 
@@ -216,7 +163,7 @@ bool VPSJpeg::Write_to_jpegfile(char* filename, BYTE* pJpgSrc, int width, int he
 
     int row_stride = width * cinfo.input_components;
 
-    JSAMPLE* image_buffer = (JSAMPLE*)pJpgSrc;
+    JSAMPLE* image_buffer = (JSAMPLE*)pRgbSrc;
     JSAMPROW row_pointer[1];
 
     while(cinfo.next_scanline < cinfo.image_height) {
@@ -231,9 +178,4 @@ bool VPSJpeg::Write_to_jpegfile(char* filename, BYTE* pJpgSrc, int width, int he
     jpeg_destroy_compress(&cinfo);
 
     return true;
-}
-
-BYTE* VPSJpeg::Decode_Jpeg(BYTE* pJpgSrc, int nJpgSrcLen) {
-    Decode_Jpeg(pJpgSrc, nJpgSrcLen, m_pRgbData); 
-    return m_pRgbData;
 }

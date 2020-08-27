@@ -9,7 +9,7 @@ public:
     virtual ~Mirroring();
 
     void Initialize(PMIRRORING_ROUTINE pRecordRoutine, PVPS_ADD_LOG_ROUTINE pLogRoutine);
-    bool StartMirroring(int nHpNo, PMIRRORING_ROUTINE pMirroringRoutine, PMIRRORING_STOP_ROUTINE pMirroringStopRoutine);
+    bool StartMirroring(int nHpNo, int width, int height, PMIRRORING_ROUTINE pMirroringRoutine, PMIRRORING_STOP_ROUTINE pMirroringStopRoutine);
     void StopMirroring(int nHpNo);
 
     void HandleJpegPacket(BYTE* pPacket, int iDataLen, short usCmd, int nHpNo);
@@ -30,6 +30,7 @@ private:
     PVPS_ADD_LOG_ROUTINE m_pLogRoutine;
 
     int m_nDeviceOrientation[MAXCHCNT];
+    int m_nDeviceDefaultOrientation[MAXCHCNT];
 
     int m_nJpgQuality[MAXCHCNT];
 

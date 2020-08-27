@@ -16,7 +16,7 @@ public:
 
 private:
     BYTE* m_pMemPool;
-    bool m_isAllocedFlag[MIR_DEFAULT_MEM_POOL_UNIT_COUNT];
+    bool m_isAllocedFlag[MIR_MAX_MEM_POOL_UNIT_COUNT];
 
     Mutex m_mMemPool;
 

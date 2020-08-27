@@ -8,45 +8,45 @@ Callback_Queue::~Callback_Queue() {
     ClearQueueInternal();
 }
 
-void Callback_Queue::EnQueue(HDCAP* recInfo) {
-//    m_mQueueLock.lock();
+void Callback_Queue::EnQueue(CALLBACK* cbInfo) {
+    m_mQueueLock.Lock();
 
-    HDCAP* itemClone = CreateQueueItem(recInfo);
-    if(itemClone != nullptr) {
-        m_recQueue.push_back(itemClone);
+    CALLBACK* itemClone = CreateQueueItem(cbInfo);
+    if(itemClone != NULL) {
+        m_cbQueue.push_back(itemClone);
     }
 
-//    m_mQueueLock.unlock();
+    m_mQueueLock.Unlock();
 }
 
-bool Callback_Queue::DeQueue(HDCAP* o_recInfo) {
+bool Callback_Queue::DeQueue(CALLBACK* o_cbInfo) {
     bool ret = false;
 
-//    m_mQueueLock.lock();
+    m_mQueueLock.Lock();
 
-    if(m_recQueue.size() > 0) {
-        rec_que_t::iterator iterBegin = m_recQueue.begin();
-        HDCAP* item = *iterBegin;
-        m_recQueue.pop_front();
+    if(m_cbQueue.size() > 0) {
+        cb_que_t::iterator iterBegin = m_cbQueue.begin();
+        CALLBACK* item = *iterBegin;
+        m_cbQueue.pop_front();
 
-        memcpy(o_recInfo, item, sizeof(HDCAP));
+        memcpy(o_cbInfo, item, sizeof(CALLBACK));
 
         DeleteQueueItem(item);
 
         ret = true;
     }
 
-//    m_mQueueLock.unlock();
+    m_mQueueLock.Unlock();
 
     return ret;
 }
 
 void Callback_Queue::ClearQueue() {
-//    m_mQueueLock.lock();
+    m_mQueueLock.Lock();
 
     ClearQueueInternal();
 
-//    m_mQueueLock.unlock();
+    m_mQueueLock.Unlock();
 }
 
 void* Callback_Queue::AllocateItemMemory() {
@@ -57,33 +57,33 @@ void Callback_Queue::FreeItemMemory(void* pMemory) {
     m_memPool.Free(pMemory);
 }
 
-HDCAP* Callback_Queue::CreateQueueItem(HDCAP* pSrc) {
-    HDCAP* ret = nullptr;
+CALLBACK* Callback_Queue::CreateQueueItem(CALLBACK* pSrc) {
+    CALLBACK* ret = NULL;
 
-    ret = (HDCAP*)AllocateItemMemory();
+    ret = (CALLBACK*)AllocateItemMemory();
 
-    if(ret != nullptr) {
-        memcpy(ret, pSrc, sizeof(HDCAP));
+    if(ret != NULL) {
+        memcpy(ret, pSrc, sizeof(CALLBACK));
     }
 
     return ret;
 }
 
-void Callback_Queue::DeleteQueueItem(HDCAP* item) {
+void Callback_Queue::DeleteQueueItem(CALLBACK* item) {
     if(item != nullptr) {
         FreeItemMemory(item);
     }
 }
 
 void Callback_Queue::ClearQueueInternal() {
-    rec_que_t::iterator iterBegin = m_recQueue.begin();
-    rec_que_t::iterator iterEnd = m_recQueue.end();
-    HDCAP* item = NULL;
+    cb_que_t::iterator iterBegin = m_cbQueue.begin();
+    cb_que_t::iterator iterEnd = m_cbQueue.end();
+    CALLBACK* item = NULL;
 
-    for(rec_que_t::iterator iterPos = iterBegin; iterPos != iterEnd; ++iterPos) {
+    for(cb_que_t::iterator iterPos = iterBegin; iterPos != iterEnd; ++iterPos) {
         item = *iterPos;
         DeleteQueueItem(item);
     }
 
-    m_recQueue.clear();
+    m_cbQueue.clear();
 }

@@ -6,8 +6,6 @@
 
 #if ENABLE_JAVA_UI
 static VPS* gs_pVps = NULL;
-static bool gs_isRunnging = true;
-static char gs_log[128] = {0,};
 
 void* VPSStartThreadFuc(void* pArg) {
     NetManager* pNetMgr = (NetManager*)pArg;
@@ -18,11 +16,9 @@ void* VPSStartThreadFuc(void* pArg) {
     return NULL;
 }
 
-void NativeLogCallback(int nHpNo, const char* log, vps_log_target_t nTarget) {
-    if(nTarget == LOG_TO_UI || nTarget == LOG_TO_BOTH) {
-        if(gs_pVps != NULL) {
-            gs_pVps->UpdateLog(log);
-        }
+void NativeCallback(CALLBACK* cb) {
+    if(gs_pVps != NULL) {
+        gs_pVps->PushCallback(cb);
     }
 }
 #endif
@@ -46,11 +42,13 @@ VPS::VPS() {
 #endif
 
 #if ENABLE_JAVA_UI
-    m_isUpdateLog = false;
+
+#if ENABLE_SHARED_MEMORY
     m_shmid = -1;
     m_shared_memory = (void *)0;
 
     CreateSharedMemory();
+#endif
 
     gs_pVps = this;
 #endif
@@ -78,16 +76,18 @@ VPS::~VPS() {
     TTF_Quit();
 #endif
 
-#if ENABLE_JAVA_UI
-
+#if ENABLE_SHARED_MEMORY
     DestroySharedMemory();
+#endif
 
+#if ENABLE_JAVA_UI
+    m_cbQueue.ClearQueue();
 #endif
 }
 
 #if ENABLE_JAVA_UI
 void VPS::Start() {
-    m_pNetMgr = new NetManager(NativeLogCallback);
+    m_pNetMgr = new NetManager(NativeCallback);
 
     pthread_t tID;
     pthread_create(&tID, NULL, &VPSStartThreadFuc, m_pNetMgr);
@@ -102,29 +102,16 @@ void VPS::Stop() {
     }
 }
 
-void VPS::UpdateLog(const char* log) {
-    m_lock.Lock();
-
-    memset( m_log, 0x00, sizeof(m_log) );
-    strcpy(m_log, log);
-    m_isUpdateLog = true;
-
-    m_lock.Unlock();
+void VPS::PushCallback(CALLBACK* cb) {
+    m_cbQueue.EnQueue(cb);
 }
 
-bool VPS::GetLastLog(char* log) {
+bool VPS::GetLastCallback(CALLBACK* cb) {
     bool ret = false;
 
-    m_lock.Lock();
-
-    if(m_isUpdateLog) {
-        strcpy(log, m_log);
-
-        m_isUpdateLog = false;
+    if( m_cbQueue.DeQueue(cb) ) {
         ret = true;
     }
-
-    m_lock.Unlock();
 
     return ret;
 }
@@ -144,7 +131,9 @@ bool VPS::IsOnService(int nHpNo) {
 
     return false;
 }
+#endif
 
+#if ENABLE_SHARED_MEMORY
 void VPS::CreateSharedMemory() {
     HDCAP* pCap= NULL;
     
@@ -168,6 +157,7 @@ void VPS::CreateSharedMemory() {
         memset( &pCap[i], 0x00, sizeof(HDCAP) );
     }
 }
+
 void VPS::DestroySharedMemory() {
     if(m_shared_memory != NULL) {
         shmdt(m_shared_memory);

@@ -12,7 +12,7 @@ void Rec_Queue::EnQueue(HDCAP* recInfo) {
     m_mQueueLock.Lock();
 
     HDCAP* itemClone = CreateQueueItem(recInfo);
-    if(itemClone != nullptr) {
+    if(itemClone != NULL) {
         m_recQueue.push_back(itemClone);
     }
 
@@ -58,11 +58,11 @@ void Rec_Queue::FreeItemMemory(void* pMemory) {
 }
 
 HDCAP* Rec_Queue::CreateQueueItem(HDCAP* pSrc) {
-    HDCAP* ret = nullptr;
+    HDCAP* ret = NULL;
 
     ret = (HDCAP*)AllocateItemMemory();
 
-    if(ret != nullptr) {
+    if(ret != NULL) {
         memcpy(ret, pSrc, sizeof(HDCAP));
     }
 
@@ -70,7 +70,7 @@ HDCAP* Rec_Queue::CreateQueueItem(HDCAP* pSrc) {
 }
 
 void Rec_Queue::DeleteQueueItem(HDCAP* item) {
-    if(item != nullptr) {
+    if(item != NULL) {
         FreeItemMemory(item);
     }
 }

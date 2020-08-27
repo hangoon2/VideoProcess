@@ -10,7 +10,7 @@
 
 #define ENABLE_JAVA_UI          1
 #define ENABLE_NATIVE_UI        0
-#define ENABLE_SHARED_MEMORY    1
+#define ENABLE_SHARED_MEMORY    0
 #define ENABLE_MIRRORING_QUEUE  1
 #define ENABLE_NONBLOCK_SOCKET  0
 
@@ -23,6 +23,8 @@
 #define CMD_TAIL_SIZE   3
 
 #define SEND_BUF_SIZE   512
+
+#define MAX_SIZE_SCREEN 960
 
 typedef int Socket;
 typedef int ServerSocket;
@@ -42,13 +44,14 @@ typedef unsigned long       DWORD;
 
 #define RECORDING_TIME              (30 * 60 * 1000)
 
-#define MIR_DEFAULT_MEM_POOL_UINT           (1024 * 1024)
-#define MIR_DEFAULT_MEM_POOL_UNIT_COUNT     30
+#define MAX_SIZE_RGB_DATA           (MAX_SIZE_SCREEN * MAX_SIZE_SCREEN * 3)
+#define MAX_SIZE_JPEG_DATA          (1024 * 1024)
+#define MIR_MAX_MEM_POOL_UNIT_COUNT 30
 
 #define VPS_DEFAULT_JPG_QUALITY     70
 #define VPS_CAPTURE_JPG_QUALITY     90
 
-#define FULLHD_IMAGE_SIZE           1382400     //(960 * 960 * 4)
+#define FULLHD_IMAGE_SIZE           1382400
 
 #define VPS_CAPTURE_RESPONSE_WAITING_TIME   3000
 
@@ -161,6 +164,25 @@ typedef struct TAG_HDCAP {
     BYTE btImg[FULLHD_IMAGE_SIZE];
 } HDCAP;
 
+typedef enum {
+    CALLBACK_TYPE_UNKNOWN = 0,
+    CALLBACK_TYPE_LOG,
+    CALLBACK_TYPE_DEVICE_START,
+    CALLBACK_TYPE_DEVICE_STOP,
+    CALLBACK_TYPE_HOST_CONNECT,
+    CALLBACK_TYPE_HOST_DISCONNECT,
+    CALLBACK_TYPE_RECORD_START,
+    CALLBACK_TYPE_RECORD_STOP,
+    CALLBACK_TYPE_UPDATE_FPS,
+    CALLBACK_TYPE_UPDATE_TRANSFER
+} CALLBACK_TYPE;
+
+typedef struct TAG_CALLBACK {
+    int nHpNo;
+    int type;
+    char data[128];
+} CALLBACK;
+
 struct SYSTEM_TIME {
     int year;
     int month;
@@ -180,6 +202,7 @@ typedef enum {
 typedef bool (*PMIRRORING_ROUTINE)(void* pMirroringPacket);
 typedef void (*PMIRRORING_STOP_ROUTINE)(int nHpNo, int nStopCode);
 typedef void (*PVPS_ADD_LOG_ROUTINE)(int nHpNo, const char* log, vps_log_target_t nTarget);
+typedef void (*PVPS_CALLBACK_ROUTINE)(CALLBACK* cb);
 
 /*//////////////////////////////////////////////
 //               Common Function              //

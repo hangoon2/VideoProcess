@@ -7,8 +7,10 @@
 #include <sys/shm.h>
 #include <pthread.h>
 
+#if ENABLE_SHARED_MEMORY
 static int shmid = -1;
 static void* shared_memory = (void *)0;
+#endif
 
 #if ENABLE_UI
 #include "VPS.h"

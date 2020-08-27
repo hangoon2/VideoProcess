@@ -8,7 +8,7 @@
 
 class NetManager {
 public:
-    NetManager(PVPS_ADD_LOG_ROUTINE fnAddLog);
+    NetManager(PVPS_CALLBACK_ROUTINE fnCallback);
     ~NetManager();
 
     void OnServerModeStart();
@@ -48,12 +48,11 @@ private:
     bool SendToClient(short usCmd, int nHpNo, BYTE* pData, int iLen, int iKeyFrameNo);
     bool Send(BYTE* pData, int iLen, ClientObject* pClient, bool force);
 
-    bool JPGCaptureAndSend(int nHpNo, BYTE* pJpgData, int iJpgDataLen);
+    bool JPGCaptureAndSend(int nHpNo, BYTE* pJpgData, int iJpgDataLen, int width, int height);
     bool JPGCaptureFailSend(int nHpNo);
     bool RecordStopAndSend(int nHpNo);
     bool RecordStopSend(int nHpNo);
     bool SendLastRecordStopResponse(int nHpNo);
-//    bool DoMirrorVideoRecording(int nHpNo, short usCmd, bool isKeyFrame, BYTE* pPacket, int iDataLen);
 
     bool HeartbeatSendToDC();
     bool VideoFpsCheckAndSend(void* pData);
@@ -63,7 +62,7 @@ private:
 private:
     AsyncMediaServerSocket m_VPSSvr;
 
-    PVPS_ADD_LOG_ROUTINE m_fnAddLog;
+    PVPS_CALLBACK_ROUTINE m_fnCallback;
 
     Mirroring m_mirror;
 
@@ -109,8 +108,6 @@ private:
 
     VPSLogger m_logger;
 
-    BYTE* m_currScene[MAXCHCNT];
-    int m_nSizeCurrScene[MAXCHCNT];
     Mutex m_lockCurrenScene[MAXCHCNT];
 };
 

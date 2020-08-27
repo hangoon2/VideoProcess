@@ -2,34 +2,35 @@
 #define CALLBACK_QUEUE_H
 
 #include "Callback_MemPool.h"
+#include "../common/Mutex.h"
 
 #include <deque>
 
 using namespace std;
 
-typedef deque<HDCAP*> rec_que_t;
+typedef deque<CALLBACK*> cb_que_t;
 
 class Callback_Queue {
 public:
     Callback_Queue();
     virtual ~Callback_Queue();
 
-    void EnQueue(HDCAP* recInfo);
-    bool DeQueue(HDCAP* o_recInfo);
+    void EnQueue(CALLBACK* cbInfo);
+    bool DeQueue(CALLBACK* o_cbInfo);
     void ClearQueue();
 
 private:
     void* AllocateItemMemory();
     void FreeItemMemory(void* pMemory);
-    HDCAP* CreateQueueItem(HDCAP* pSrc);
-    void DeleteQueueItem(HDCAP* item);
+    CALLBACK* CreateQueueItem(CALLBACK* pSrc);
+    void DeleteQueueItem(CALLBACK* item);
     void ClearQueueInternal();
 
 private:
-    rec_que_t m_recQueue;
+    cb_que_t m_cbQueue;
     Callback_MemPool m_memPool;
 
-//    QMutex m_mQueueLock;
+    Mutex m_mQueueLock;
 };
 
 #endif

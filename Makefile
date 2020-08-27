@@ -1,15 +1,20 @@
 CC = g++
+
 TARGET = libVPSNativeLib.dylib
-CPPFLAGS = --std=c++11
+
+CPPFLAGS = --std=c++11 -fpic -Wall -O2
+
 JNI_INC = -I $(JAVA_HOME)/include -I $(JAVA_HOME)/include/darwin
 OPENCV_INC = -I /usr/local/include/opencv4
 JPEG_INC = -I /usr/local/opt/jpeg-turbo/include
 GLOG_INC = -I /usr/local/opt/glog/include
 
-LDLIBS = -lopencv_core -lopencv_imgcodecs -lpthread \
-		-lavformat -lavcodec -lavutil -lswscale -lglog \
+OPENCV_LIBS = -lopencv_core -lopencv_imgcodecs
+FFMPEG_LIBS = -lavformat -lavcodec -lavutil -lswscale
+
+LDLIBS = -lglog $(OPENCV_LIBS) $(FFMPEG_LIBS) \
 		-L /usr/local/opt/jpeg-turbo/lib -lturbojpeg \
-		-L /usr/local/opt/sdl2/lib 
+		-lpthread 
 
 OBJS = main.o VPS.o \
 		com_onycom_vps_VPSNativeLib.o Callback_MemPool.o Callback_Queue.o \
@@ -17,9 +22,10 @@ OBJS = main.o VPS.o \
 		MIR_Client.o MIR_MemPool.o MIR_Queue.o MIR_QueueHandler.o VPSJpeg.o VPSCommon.o \
 		Timer.o Mutex.o VPSLogger.o Rec_MemPool.o Rec_Queue.o VideoRecorder.o
 
+SRCS = $(OBJS:.o=.cpp)
+
 $(TARGET): $(OBJS)
-	$(CC) -shared -O2 -o $@ $(OBJS) $(LDLIBS)
-#	$(CC) -O2 -o $@ $(OBJS) $(LDLIBS)
+	$(CC) -o $@ $(OBJS) $(LDLIBS)
 	rm -f *.o
 
 main.o: main.cpp
@@ -29,7 +35,7 @@ VPS.o: VPS.cpp
 	$(CC) -c VPS.cpp $(CPPFLAGS)
 
 com_onycom_vps_VPSNativeLib.o: javaui/com_onycom_vps_VPSNativeLib.cpp
-	$(CC) -fPIC -c javaui/com_onycom_vps_VPSNativeLib.cpp $(CPPFLAGS) $(JNI_INC) 
+	$(CC) -c javaui/com_onycom_vps_VPSNativeLib.cpp $(CPPFLAGS) $(JNI_INC) 
 
 Callback_MemPool.o: javaui/Callback_MemPool.cpp
 	$(CC) -c javaui/Callback_MemPool.cpp $(CPPFLAGS)

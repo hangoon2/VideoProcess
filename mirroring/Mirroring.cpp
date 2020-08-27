@@ -52,6 +52,7 @@ Mirroring::Mirroring() {
         m_pMirroringStopRoutine[i] = NULL;
 
         m_nDeviceOrientation[i] = 1;
+        m_nDeviceDefaultOrientation[i] = 1;
 
         m_nJpgQuality[i] = VPS_DEFAULT_JPG_QUALITY;
 
@@ -90,7 +91,7 @@ void Mirroring::Initialize(PMIRRORING_ROUTINE pRecordRoutine, PVPS_ADD_LOG_ROUTI
     }
 }
 
-bool Mirroring::StartMirroring(int nHpNo, 
+bool Mirroring::StartMirroring(int nHpNo, int width, int height, 
             PMIRRORING_ROUTINE pMirroringRoutine, 
             PMIRRORING_STOP_ROUTINE pMirroringStopRoutine) {
     bool ret = false;
@@ -98,6 +99,12 @@ bool Mirroring::StartMirroring(int nHpNo,
     int nControlPort = CONTROL_PORT + nHpNo;
 
     if(m_pMirroringStopRoutine[nHpNo - 1] == NULL) {
+        if(width > height) {
+            m_nDeviceDefaultOrientation[nHpNo - 1] = 0;
+        } else {
+            m_nDeviceDefaultOrientation[nHpNo - 1] = 1;
+        }
+
         // 쓰래드 시작
 #if ENABLE_MIRRORING_QUEUE
         if( m_mirClient[nHpNo - 1].StartRunClientThread(nHpNo, nMirrorPort, nControlPort, MirroringEnQueue, MirrorStoppedCallback) ) {
@@ -139,6 +146,27 @@ void Mirroring::HandleJpegPacket(BYTE* pPacket, int iDataLen, short usCmd, int n
     int nLongerKeyFrameLength = nKeyFrameWidth > nKeyFrameHeight ? nKeyFrameWidth : nKeyFrameHeight;
     int nShorterKeyFrameLength = nKeyFrameWidth < nKeyFrameHeight ? nKeyFrameWidth : nKeyFrameHeight;
 
+    // Portrait인 기본 디바이스가 화면 화면 상태가 Landscape 상태로 종료될 경우
+    // nxptc_vd가 실행될때 디바이스의 기본모드를 Landscape로 잘못 설정한 경우 
+    // CMD_JPG_LANDSCAPE, CMD_JPG_PORTRAIT을 보낸다. 반대의 경우도 발생
+    if(m_nDeviceDefaultOrientation[nHpNo - 1] == 1) {
+        if(usCmd == CMD_JPG_LANDSCAPE) {
+            usCmd = CMD_JPG_DEV_VERT_IMG_VERT;
+            *(short*)&pPacket[5] = htons(usCmd);
+        } else if(usCmd == CMD_JPG_PORTRAIT) {
+            usCmd = CMD_JPG_DEV_HORI_IMG_HORI;
+            *(short*)&pPacket[5] = htons(usCmd);
+        }
+    } else {
+        if(usCmd == CMD_JPG_DEV_VERT_IMG_VERT) {
+            usCmd = CMD_JPG_LANDSCAPE;
+            *(short*)&pPacket[5] = htons(usCmd);
+        } else if(usCmd == CMD_JPG_DEV_HORI_IMG_HORI) {
+            usCmd = CMD_JPG_PORTRAIT;
+            *(short*)&pPacket[5] = htons(usCmd);
+        }
+    }
+
     if(usCmd == CMD_JPG_LANDSCAPE || usCmd == CMD_JPG_PORTRAIT) {
         // 디바이스 회전을 고려한 command code 변경: 1=세로, 0=가로
         int nDeviceOrientation = m_nDeviceOrientation[nHpNo - 1];
@@ -162,8 +190,6 @@ void Mirroring::HandleJpegPacket(BYTE* pPacket, int iDataLen, short usCmd, int n
         int nJpgDataSize = iDataLen - 17;
 
         if(usCmd == CMD_JPG_DEV_VERT_IMG_VERT || usCmd == CMD_JPG_DEV_VERT_IMG_HORI) {
-//            VPSJpeg vpsJpeg;
-
             int nNewJpgDataSize = gs_mirJpeg[nHpNo - 1].RotateRight( pJpgData, nJpgDataSize, m_nJpgQuality[nHpNo - 1], (nRight - nLeft), (nBottom - nTop) );
             if(nNewJpgDataSize > 0) {
                 *(short*)&pPacket[16] = htons(nShorterKeyFrameLength - nBottom);
@@ -201,9 +227,6 @@ void Mirroring::HandleJpegPacket(BYTE* pPacket, int iDataLen, short usCmd, int n
             usCmd = CMD_JPG_DEV_VERT_IMG_HORI;
             *(short*)&pPacket[5] = htons(usCmd);
         }
-
-        // // 전체 패킷 길이
-        // int dwTotLen = CMD_HEAD_SIZE + iDataLen + CMD_TAIL_SIZE;
 
         // JPEG 회전을 위한 코드
         BYTE* pJpgData = pPacket + 25;
@@ -257,10 +280,6 @@ void Mirroring::HandleJpegPacket(BYTE* pPacket, int iDataLen, short usCmd, int n
     if(m_pMirroringRoutine[nHpNo - 1] != NULL) {
         m_pMirroringRoutine[nHpNo - 1](pPacket);
     }
-
-    // if(m_pRecordingRoutine != NULL) {
-    //     m_pRecordingRoutine(pPacket);
-    // }
 }
 
 void Mirroring::HandleJpegCaptureFailedPacket(BYTE* pPacket, int nHpNo) {
@@ -279,21 +298,24 @@ void Mirroring::OnMirrorStopped(int nHpNo, int nStopCode) {
 }
 
 void Mirroring::SendKeyFrame(int nHpNo) {
+    if(m_pMirroringStopRoutine[nHpNo - 1] == NULL) return;
+
     m_mirClient[nHpNo - 1].SendKeyFramePacket();
 }
 
 void Mirroring::SendControlPacket(int nHpNo, BYTE* pData, int len) {
+    if(m_pMirroringStopRoutine[nHpNo - 1] == NULL) return;
+    
     short usCmd = ntohs( *(short*)&pData[5] );
     if(usCmd == CMD_PLAYER_QUALITY) {
-        m_nJpgQuality[nHpNo - 1] = ntohs( *(short*)&pData[8] );
+        int quality = ntohs( *(short*)&pData[8] );
 
-        if(m_nJpgQuality[nHpNo - 1] < 1) {
-            m_nJpgQuality[nHpNo - 1] = 1;
-            *(short*)&pData[8] = ntohs(m_nJpgQuality[nHpNo - 1]);
-        } else if(m_nJpgQuality[nHpNo - 1] > 90) {
-            m_nJpgQuality[nHpNo - 1] = 90;
-            *(short*)&pData[8] = ntohs(m_nJpgQuality[nHpNo - 1]);
+        if(quality < 1 || quality > 100) {
+            printf("[VPS:%d] Quality 값이 범위를 벗어남: %d\n",  nHpNo, quality);
+            return;
         }
+
+        m_nJpgQuality[nHpNo - 1] = quality;
     }
 
     m_mirClient[nHpNo - 1].SendToControlSocket((const char*)pData, len);

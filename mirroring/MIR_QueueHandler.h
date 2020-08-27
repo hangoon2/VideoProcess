@@ -22,7 +22,7 @@ private:
 
     MIR_Queue m_mirQue;
 
-    BYTE m_tempQueueItem[MIR_DEFAULT_MEM_POOL_UINT];
+    BYTE m_tempQueueItem[MAX_SIZE_JPEG_DATA];
 
     pthread_t m_tID;
 

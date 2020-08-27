@@ -8,6 +8,10 @@
 #include <SDL2/SDL_ttf.h>
 #endif
 
+#if ENABLE_JAVA_UI
+#include "javaui/Callback_Queue.h"
+#endif
+
 class VPS {
 public:
     VPS();
@@ -30,26 +34,26 @@ private:
 #if ENABLE_JAVA_UI
     void Start();
     void Stop();
-    void UpdateLog(const char* log);
-    bool GetLastLog(char* log);
+    void PushCallback(CALLBACK* cb);
+    bool GetLastCallback(CALLBACK* cb);
     int GetLastScene(int nHpNo, BYTE* pDstJpg);
     bool IsOnService(int nHpNo);
+#endif
 
 private:
     void CreateSharedMemory();
     void DestroySharedMemory();
-#endif
 
 private:
     NetManager* m_pNetMgr;
 
-#if ENABLE_JAVA_UI
+#if ENABLE_SHARED_MEMORY
     int m_shmid;
     void* m_shared_memory;
+#endif
 
-    Mutex m_lock;
-    char m_log[128];
-    bool m_isUpdateLog;
+#if ENABLE_JAVA_UI
+    Callback_Queue m_cbQueue;
 #endif
 
 #if ENABLE_NATIVE_UI

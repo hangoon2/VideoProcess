@@ -14,7 +14,7 @@ void MIR_Queue::EnQueue(BYTE* item) {
     m_mMirQue.Lock();
 
     BYTE* itemClone = CreateQueueItem(item);
-    if(itemClone != nullptr) { 
+    if(itemClone != NULL) { 
         bool isKeyFrame = *&itemClone[24] == 1 ? true : false;
         if(isKeyFrame) {
             ClearQueueInternal();
@@ -36,7 +36,7 @@ bool MIR_Queue::DeQueue(BYTE* o_item) {
         BYTE* item = *iterBegin;
         m_mirQueue.pop_front();
 
-        memcpy(o_item, item, MIR_DEFAULT_MEM_POOL_UINT);
+        memcpy(o_item, item, MAX_SIZE_JPEG_DATA);
 
         DeleteQueueItem(item);
 
@@ -72,7 +72,7 @@ BYTE* MIR_Queue::CreateQueueItem(BYTE* pSrc) {
     UINT iDataLen = ntohl( *(UINT*)&pPacket[1] );
 
     UINT nTotLen = CMD_HEAD_SIZE + iDataLen + CMD_TAIL_SIZE;
-    if(nTotLen > MIR_DEFAULT_MEM_POOL_UINT) {
+    if(nTotLen > MAX_SIZE_JPEG_DATA) {
         return NULL;
     }
 

@@ -22,7 +22,9 @@ VideoRecorder::VideoRecorder(void* sharedMem, int nHpNo, int retPort) {
     m_nHpNo = nHpNo;
     m_retPort = retPort;
 
-    m_swsctx = sws_getCachedContext(NULL, 960, 960, AV_PIX_FMT_RGB24, 960, 960,AV_PIX_FMT_YUV420P, SWS_BICUBIC, NULL, NULL, NULL);
+    m_swsctx = sws_getCachedContext(NULL, MAX_SIZE_SCREEN, MAX_SIZE_SCREEN, 
+                                    AV_PIX_FMT_RGB24, MAX_SIZE_SCREEN, MAX_SIZE_SCREEN,
+                                    AV_PIX_FMT_YUV420P, SWS_BICUBIC, NULL, NULL, NULL);
 
     m_rgb24 = av_frame_alloc();
     m_yuv420p = av_frame_alloc();
@@ -74,7 +76,7 @@ bool VideoRecorder::EnQueue(unsigned char* pImgData) {
     if( IsThreadRunning() && IsCompressTime(m_dlCaptureGap) ) {
         unsigned long time = GetTickCount();
 
-        av_image_fill_arrays(m_rgb24->data, m_rgb24->linesize, (uint8_t*)pImgData, AV_PIX_FMT_RGB24, 960, 960, 1);
+        av_image_fill_arrays(m_rgb24->data, m_rgb24->linesize, (uint8_t*)pImgData, AV_PIX_FMT_RGB24, MAX_SIZE_SCREEN, MAX_SIZE_SCREEN, 1);
         
 #if ENABLE_SHARED_MEMORY
         HDCAP* pInCap = (HDCAP*)GetFreeInVideoMem(m_nHpNo - 1, m_sharedMem, MEM_SHARED_MAX_COUNT);
@@ -84,8 +86,8 @@ bool VideoRecorder::EnQueue(unsigned char* pImgData) {
             pInCap->ui64ID = IncreamentImageId();
             pInCap->msec = time;
 
-            av_image_fill_arrays(m_yuv420p->data, m_yuv420p->linesize, (uint8_t*)pInCap->btImg, AV_PIX_FMT_YUV420P, 960, 960, 1);
-            sws_scale(m_swsctx, m_rgb24->data, m_rgb24->linesize, 0, 960, m_yuv420p->data, m_yuv420p->linesize);    
+            av_image_fill_arrays(m_yuv420p->data, m_yuv420p->linesize, (uint8_t*)pInCap->btImg, AV_PIX_FMT_YUV420P, MAX_SIZE_SCREEN, MAX_SIZE_SCREEN, 1);
+            sws_scale(m_swsctx, m_rgb24->data, m_rgb24->linesize, 0, MAX_SIZE_SCREEN, m_yuv420p->data, m_yuv420p->linesize);    
 
             pInCap->accessMode = TYPE_ACCESS_DATA;  // 데이터 있음
         }
@@ -94,8 +96,8 @@ bool VideoRecorder::EnQueue(unsigned char* pImgData) {
 
         m_recFrame.msec = time;
 
-        av_image_fill_arrays(m_yuv420p->data, m_yuv420p->linesize, (uint8_t*)m_recFrame.btImg, AV_PIX_FMT_YUV420P, 960, 960, 1);
-        sws_scale(m_swsctx, m_rgb24->data, m_rgb24->linesize, 0, 960, m_yuv420p->data, m_yuv420p->linesize);
+        av_image_fill_arrays(m_yuv420p->data, m_yuv420p->linesize, (uint8_t*)m_recFrame.btImg, AV_PIX_FMT_YUV420P, MAX_SIZE_SCREEN, MAX_SIZE_SCREEN, 1);
+        sws_scale(m_swsctx, m_rgb24->data, m_rgb24->linesize, 0, MAX_SIZE_SCREEN, m_yuv420p->data, m_yuv420p->linesize);
 
         m_recQueue.EnQueue(&m_recFrame);
 #endif
@@ -169,7 +171,7 @@ void VideoRecorder::OnRecord() {
 #endif
             m_outCount++;
 
-            av_image_fill_arrays(frame->data, frame->linesize, (uint8_t*)pFrame->btImg, AV_PIX_FMT_YUV420P, 960, 960, 1);
+            av_image_fill_arrays(frame->data, frame->linesize, (uint8_t*)pFrame->btImg, AV_PIX_FMT_YUV420P, MAX_SIZE_SCREEN, MAX_SIZE_SCREEN, 1);
 
             usleep(1);
 
@@ -267,8 +269,8 @@ bool VideoRecorder::OpenEncoder(char* filePath) {
 
     AVCodecContext* codec_ctx = m_stream->codec;
 
-    codec_ctx->width = 960;
-    codec_ctx->height = 960;
+    codec_ctx->width = MAX_SIZE_SCREEN;
+    codec_ctx->height = MAX_SIZE_SCREEN;
     codec_ctx->time_base.num = 1;
     codec_ctx->time_base.den = 16;
     codec_ctx->global_quality = 4;

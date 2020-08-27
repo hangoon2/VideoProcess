@@ -2,6 +2,7 @@
 #define ASYNC_MEDIA_SERVER_SOCKET_H
 
 #include "../common/VPSCommon.h"
+#include "../common/Mutex.h"
 #include "ClientObject.h"
 #include "ClientList.h"
 
@@ -37,6 +38,8 @@ private:
 private:
     ServerSocket m_serverSock;
     ClientList m_clientList;
+
+    Mutex m_mClientLock;
 
     void* m_pNetMgr;
 

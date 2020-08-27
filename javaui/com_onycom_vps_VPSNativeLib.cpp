@@ -8,6 +8,8 @@ static VPS* gs_pVps = NULL;
 
 static bool gs_isRunnging = true;
 
+#if ENABLE_JAVA_UI
+
 /*
  * Class:     com_onycom_vps_VPSNativeLib
  * Method:    Start
@@ -20,19 +22,18 @@ JNIEXPORT void JNICALL Java_com_onycom_vps_VPSNativeLib_Start
     gs_pVps->Start();
 
     jclass cls = env->GetObjectClass(object);
-    jmethodID mid = env->GetMethodID(cls, "CallbackLog", "(ILjava/lang/String;)V");
-    if(mid == NULL) {
+
+    jmethodID callbackFunc = env->GetMethodID(cls, "CallbackFunc", "(IILjava/lang/String;)V");
+    if(callbackFunc == NULL) {
         printf("==================> NOT FOUND CALLBACK METHOD\n");
         return;
     }
 
-    char log[128] = {0,};
+    CALLBACK cb;
     while(gs_isRunnging) {
-        if( gs_pVps->GetLastLog(log) ) {
-            jstring strLog = env->NewStringUTF(log);
-            env->CallObjectMethod(object, mid, 1, strLog);
-
-            memset( log, 0x00, sizeof(log) );
+        if( gs_pVps->GetLastCallback(&cb) ) {
+            jstring strData = env->NewStringUTF(cb.data);
+            env->CallObjectMethod(object, callbackFunc, cb.nHpNo, cb.type, strData);
         }
 
         usleep(100);
@@ -68,7 +69,7 @@ JNIEXPORT jint JNICALL Java_com_onycom_vps_VPSNativeLib_GetLastScene
   (JNIEnv *env, jobject object, jint nHpNo, jbyteArray pDstJpg) {
     if(gs_pVps != NULL) {
         if( gs_pVps->IsOnService(nHpNo) ) {
-            BYTE* pDst = (BYTE*)malloc(MIR_DEFAULT_MEM_POOL_UINT);
+            BYTE* pDst = (BYTE*)malloc(MAX_SIZE_RGB_DATA);
 
             int ret = gs_pVps->GetLastScene(nHpNo, pDst);
             if(ret > 0) {
@@ -83,3 +84,5 @@ JNIEXPORT jint JNICALL Java_com_onycom_vps_VPSNativeLib_GetLastScene
 
     return 0;
 }
+
+#endif
