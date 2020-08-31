@@ -679,6 +679,10 @@ bool NetManager::DoMirrorVideoRecording(int nHpNo, short usCmd, bool isKeyFrame,
         }
     }
 
+    if(rect.x + rect.width > MAX_SIZE_SCREEN || rect.y + rect.height > MAX_SIZE_SCREEN) {
+        return false;
+    }
+
     m_lockCurrenScene[nHpNo - 1].Lock();
 
     Mat imageROI(gs_lastScene[nHpNo - 1], rect);
