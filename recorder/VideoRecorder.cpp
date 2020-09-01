@@ -36,6 +36,8 @@ VideoRecorder::VideoRecorder(void* sharedMem, int nHpNo, int retPort) {
 
     m_dlCaptureGap = 1000 / 16;
     m_dlLastGapTime = 0;
+
+    m_pStopRoutine = NULL;
 }
 
 VideoRecorder::~VideoRecorder() {
@@ -51,9 +53,11 @@ VideoRecorder::~VideoRecorder() {
     av_frame_free(&m_yuv420p);
 }
 
-void VideoRecorder::StartRecord(char* filePath) {
+void VideoRecorder::StartRecord(char* filePath, PVPS_RECORD_STOP_ROUTINE pStopRoutine) {
     m_inCount = 0;
     m_outCount = 0;
+
+    m_pStopRoutine = pStopRoutine;
 
 #if ENABLE_SHARED_MEMORY
     ClearVideoMem(m_nHpNo - 1, m_sharedMem, MEM_SHARED_MAX_COUNT);
@@ -223,20 +227,30 @@ void VideoRecorder::OnRecord() {
         pFrame = NULL;
     }
 
+    printf("[VPS:%d] VideoRecorder::OnRecord >>> 1\n", m_nHpNo);
     av_write_trailer(m_outctx);
+    printf("[VPS:%d] VideoRecorder::OnRecord >>> 2\n", m_nHpNo);
 
     av_frame_free(&frame);
+    printf("[VPS:%d] VideoRecorder::OnRecord >>> 3\n", m_nHpNo);
     avcodec_close(codec_ctx);
 
+    printf("[VPS:%d] VideoRecorder::OnRecord >>> 4\n", m_nHpNo);
     avio_close(m_outctx->pb);
+    printf("[VPS:%d] VideoRecorder::OnRecord >>> 5\n", m_nHpNo);
     avformat_free_context(m_outctx);
+    printf("[VPS:%d] VideoRecorder::OnRecord >>> 6\n", m_nHpNo);
 
 #if ENABLE_SHARED_MEMORY
 #else
     m_recQueue.ClearQueue();
 #endif
 
-    RecordStopAndSend();
+    if(m_pStopRoutine != NULL) {
+        m_pStopRoutine(m_nHpNo);
+    } else {
+        RecordStopAndSend();
+    }
 }
 
 bool VideoRecorder::OpenEncoder(char* filePath) {
@@ -367,11 +381,13 @@ ULONGLONG VideoRecorder::IncreamentImageId() {
 #endif
 
 void VideoRecorder::RecordStopAndSend() {
+    printf("[VPS:%d] VideoRecorder::RecordStopAndSend >>> 1\n", m_nHpNo);
     Socket sock = socket(PF_INET, SOCK_STREAM, 0);
     if(sock == INVALID_SOCKET) {
         printf("[VPS:%d] Record Result sock() error[%d]\n", m_nHpNo, errno);
         return;
     }
+    printf("[VPS:%d] VideoRecorder::RecordStopAndSend >>> 2\n", m_nHpNo);
 
     // 종료방식
     // 즉시 연결을 종료한다. 상대방에게는 FIN이나 RTS 시그널이 전달된다.
@@ -383,14 +399,17 @@ void VideoRecorder::RecordStopAndSend() {
         return;
     }
 
+    printf("[VPS:%d] VideoRecorder::RecordStopAndSend >>> 3\n", m_nHpNo);
     struct sockaddr_in servAddr;
     memset( &servAddr, 0x00, sizeof(servAddr) );
     servAddr.sin_family = AF_INET;
     servAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
     servAddr.sin_port = htons(m_retPort);
 
+    printf("[VPS:%d] VideoRecorder::RecordStopAndSend >>> 4\n", m_nHpNo);
     if( connect( sock, (sockaddr*)&servAddr, sizeof(servAddr) ) == 0 ) {
         int totLen = 0;
+        printf("[VPS:%d] VideoRecorder::RecordStopAndSend >>> 5\n", m_nHpNo);
         BYTE* pSendData = MakeSendData2(CMD_CAPTURE_COMPLETED, m_nHpNo, 0, NULL, (BYTE*)m_pBufSendData, totLen);
         if(pSendData != NULL) {
             int ret = (int)write(sock, pSendData, totLen);
@@ -404,8 +423,11 @@ void VideoRecorder::RecordStopAndSend() {
 
     this_thread::sleep_for( chrono::milliseconds(100) );    // 소켓 데이터 처리를 위한 기다림 ...
 
+    printf("[VPS:%d] VideoRecorder::RecordStopAndSend >>> 6\n", m_nHpNo);
     shutdown(sock, SHUT_RDWR);
+    printf("[VPS:%d] VideoRecorder::RecordStopAndSend >>> 7\n", m_nHpNo);
     close(sock);
+    printf("[VPS:%d] VideoRecorder::RecordStopAndSend >>> 8\n", m_nHpNo);
 }
 
 bool VideoRecorder::IsCompressTime(double dlCaptureGap) {

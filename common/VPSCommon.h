@@ -8,9 +8,9 @@
 #define MAXCHCNT            10
 #define MAXCLIENT_PER_CH    21  // Host(1) + Guest(20) = 21
 
-#define ENABLE_JAVA_UI          1
+#define ENABLE_JAVA_UI          0
 #define ENABLE_NATIVE_UI        0
-#define ENABLE_SHARED_MEMORY    0
+#define ENABLE_SHARED_MEMORY    1
 #define ENABLE_MIRRORING_QUEUE  1
 #define ENABLE_NONBLOCK_SOCKET  0
 
@@ -203,6 +203,7 @@ typedef bool (*PMIRRORING_ROUTINE)(void* pMirroringPacket);
 typedef void (*PMIRRORING_STOP_ROUTINE)(int nHpNo, int nStopCode);
 typedef void (*PVPS_ADD_LOG_ROUTINE)(int nHpNo, const char* log, vps_log_target_t nTarget);
 typedef void (*PVPS_CALLBACK_ROUTINE)(CALLBACK* cb);
+typedef void (*PVPS_RECORD_STOP_ROUTINE)(int nHpNo);
 
 /*//////////////////////////////////////////////
 //               Common Function              //

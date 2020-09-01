@@ -29,6 +29,7 @@ public:
     void DeviceRotate(int nHpNo, bool portrait);
 
     void Record(int nHpNo, bool start);
+    void RecordStop(int nHpNo);
 
     bool DoMirrorVideoRecording(int nHpNo, short usCmd, bool isKeyFrame, BYTE* pPacket, int iDataLen);
 

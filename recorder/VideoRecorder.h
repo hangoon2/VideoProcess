@@ -21,7 +21,7 @@ public:
     VideoRecorder(void* sharedMem, int nHpNo, int retPort);
     virtual ~VideoRecorder();
 
-    void StartRecord(char* filePath);
+    void StartRecord(char* filePath, PVPS_RECORD_STOP_ROUTINE pStopRoutine);
     void StopRecord();
     bool EnQueue(unsigned char* pImgData);
 
@@ -55,6 +55,8 @@ private:
 
     double m_dlCaptureGap;
     double m_dlLastGapTime;
+
+    PVPS_RECORD_STOP_ROUTINE m_pStopRoutine;
 
 #if ENABLE_SHARED_MEMORY
     void* m_sharedMem;

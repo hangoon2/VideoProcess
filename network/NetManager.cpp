@@ -49,6 +49,12 @@ void DoMirrorStoppedCallback(int nHpNo, int nStopCode) {
     }
 }
 
+void DoRecordStopCallback(int nHpNo) {
+    if(pNetMgr != NULL) {
+        pNetMgr->RecordStop(nHpNo);
+    }
+}
+
 // bool DoMirrorRecordCallback(void* pMirroringPacket) {
 //     // if(pNetMgr != NULL) {
 //     //     BYTE* pPacket = (BYTE*)pMirroringPacket;
@@ -563,7 +569,7 @@ void NetManager::Record(int nHpNo, bool start) {
 
         sprintf(filePath, "%s/%d/%s", m_strAviSavePath, nHpNo, gs_recordFileName[nHpNo - 1]);
 
-        gs_recorder[nHpNo - 1]->StartRecord(filePath);
+        gs_recorder[nHpNo - 1]->StartRecord(filePath, DoRecordStopCallback);
 
         m_isRunRecord[nHpNo - 1] = true;
         m_nRecStartTime[nHpNo - 1] = GetTickCount();
@@ -589,6 +595,16 @@ void NetManager::Record(int nHpNo, bool start) {
         cb.type = start ? CALLBACK_TYPE_RECORD_START : CALLBACK_TYPE_RECORD_STOP;
 
         m_fnCallback(&cb);
+    }
+}
+
+void NetManager::RecordStop(int nHpNo) {
+    if(m_isReceivedRecordStartCommand[nHpNo - 1]) {
+        // VPS 자체적으로 종료한 경우(33분) DC로 알리지 않는다.
+        // 추후 Recording Stop을 DC로 부터 받으면 그때 알려준다.
+        // file name을 저장해 둔다. : gs_recordFileName[nHpNo - 1]
+    } else {
+        RecordStopAndSend(nHpNo);
     }
 }
 
