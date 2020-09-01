@@ -123,7 +123,7 @@ void AsyncMediaServerSocket::OnAccept(int efd, ServerSocket serverSock) {
 
     m_clientList.Insert(clientSock, pClient);
 
-    int bufsize = 1024 * 1024 * 4;
+    int bufsize = 1024 * 256;
     setsockopt( clientSock, SOL_SOCKET, SO_SNDBUF, &bufsize, sizeof(bufsize) );
 
     // 종료방식
@@ -338,7 +338,7 @@ int AsyncMediaServerSocket::InitSocket(void* pNetMgr, int port) {
     } 
 
     // 입출력 버퍼크기의 변경
-    int send_buf = 1024 * 128;
+    int send_buf = 1024 * 256;
     int rcv_buf = 1024 * 128;
 
     setsockopt( m_serverSock, SOL_SOCKET, SO_RCVBUF, &rcv_buf, sizeof(rcv_buf) );

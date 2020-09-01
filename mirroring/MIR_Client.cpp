@@ -166,9 +166,8 @@ void* ThreadFunc(void* pArg) {
         // memory alloc : read buffer
         pClient->m_pRcvBuf = (BYTE*)malloc(RECV_BUF_SIZE);
 
-        int i = 0;
         while( !pClient->IsDoExitRunClientThread() ) {
-            if( !pClient->GetData(epollfd, pClient->m_mirrorSocket, 10000) ) {
+            if( !pClient->GetData(epollfd, pClient->m_mirrorSocket, 1000) ) {
                 pClient->SetDoExitRunClientThread(true);
 
                 printf("[VPS:%d] Mirroring socket is disconnected.\n", nHpNo);
@@ -324,6 +323,8 @@ bool MIR_Client::IsRunClientThreadReady() {
 
 void MIR_Client::CleanUpRunClientThreadData() {
     if(m_tID != NULL) {
+        m_tID = NULL;
+
         SetDoExitRunClientThread(false);
 
         if(m_mirrorSocket != -1) {
@@ -341,8 +342,6 @@ void MIR_Client::CleanUpRunClientThreadData() {
             close(m_controlSocket);
             m_controlSocket = -1;
         }
-
-        m_tID = NULL;
     }
 }
 
@@ -488,7 +487,6 @@ bool MIR_Client::GetData(int efd, Socket sock, int waitms) {
     int n = kevent(efd, NULL, 0, activeEvs, kMaxEvents, &timeout);
 
     for(int i = 0; i < n; i++) {
-//        Socket clientSock = (int)(intptr_t)activeEvs[i].udata;
         int events = activeEvs[i].filter;
 
         if(events == EVFILT_READ) {
@@ -552,7 +550,6 @@ bool MIR_Client::GetData(int efd, Socket sock, int waitms) {
                             m_rxStreamOrder = RX_PACKET_POS_START;
 
                             if(m_pMirroringRoutine != NULL) {
-                                printf("READ DATA \n");
                                 m_pMirroringRoutine( (void*)m_pRcvBuf );
                             }
                         }
@@ -560,15 +557,15 @@ bool MIR_Client::GetData(int efd, Socket sock, int waitms) {
                 }
             }
 
-            if( n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK) ) {
-                return true;
+            if( readLen < 0 && (errno == EAGAIN || errno == EWOULDBLOCK) ) {
+                return continue;
             }
 
             return false;
         } 
     }
 
-    return false;
+    return true;
 }
 #endif
 
