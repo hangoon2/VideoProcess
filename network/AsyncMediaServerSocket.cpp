@@ -257,18 +257,19 @@ bool AsyncMediaServerSocket::OnSend(ClientObject* pClient, BYTE* pData, int iLen
     Socket sock = pClient->m_clientSock;
 
     for(int i = 0; i < 5; i++) {
-        int nSendResult = send(sock, pData, iLen, 0);
+//        int nSendResult = send(sock, pData, iLen, 0);
+        int nSendResult = write(sock, pData, iLen);
         if(nSendResult == SOCKET_ERROR) {
             if(errno == EWOULDBLOCK) {
                 usleep(1);
                 continue;
             } else {
-                printf("Socket Send() Error : %d\n", errno);
+                printf("[VPS:%d] Socket Send() Error : %d\n", pClient->m_nHpNo, errno);
                 return false;
             }
         } else {
             if(nSendResult != iLen)
-                printf("SEND DATA : %d/%d\n", nSendResult, iLen);
+                printf("[VPS:%d] SEND DATA : %d/%d (%d)\n", pClient->m_nHpNo, nSendResult, iLen, errno);
             return true;
         }
     }

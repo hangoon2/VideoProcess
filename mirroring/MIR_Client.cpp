@@ -170,7 +170,7 @@ void* ThreadFunc(void* pArg) {
             if( !pClient->GetData(epollfd, pClient->m_mirrorSocket, 1000) ) {
                 pClient->SetDoExitRunClientThread(true);
 
-                printf("[VPS:%d] Mirroring socket is disconnected.\n", nHpNo);
+                pClient->AddLog("Mirroring socket is disconnected.", LOG_TO_FILE);
                 break;
             }
         }
@@ -558,7 +558,7 @@ bool MIR_Client::GetData(int efd, Socket sock, int waitms) {
             }
 
             if( readLen < 0 && (errno == EAGAIN || errno == EWOULDBLOCK) ) {
-                return continue;
+                continue;
             }
 
             return false;
