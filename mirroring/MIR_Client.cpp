@@ -14,9 +14,9 @@
 
 using namespace std;
 
-#if ENABLE_NONBLOCK_SOCKET
-const int kReadEvent = 1;
-#endif
+// #if ENABLE_NONBLOCK_SOCKET
+// const int kReadEvent = 1;
+// #endif
 
 bool SetNonBlock(Socket sock) {
     int flags = fcntl(sock, F_GETFL, 0);
