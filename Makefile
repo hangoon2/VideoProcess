@@ -1,6 +1,6 @@
 CC = g++
 
-TARGET = libVPSNativeLib.dylib
+TARGET = vps	#libVPSNativeLib.dylib
 
 CPPFLAGS = --std=c++11 -fpic -Wall -O2
 
