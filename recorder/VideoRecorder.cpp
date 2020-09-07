@@ -38,6 +38,9 @@ VideoRecorder::VideoRecorder(void* sharedMem, int nHpNo, int retPort) {
     m_dlLastGapTime = 0;
 
     m_pStopRoutine = NULL;
+
+    m_outctx = NULL;
+    m_codec_ctx = NULL;
 }
 
 VideoRecorder::~VideoRecorder() {
@@ -73,7 +76,9 @@ void VideoRecorder::StartRecord(char* filePath, PVPS_RECORD_STOP_ROUTINE pStopRo
 
 void VideoRecorder::StopRecord()
 {
-   SetThreadRunning(false);
+    if( IsThreadRunning() ) {
+        SetThreadRunning(false);
+    }
 }
 
 bool VideoRecorder::EnQueue(unsigned char* pImgData) {
@@ -121,7 +126,8 @@ bool VideoRecorder::IsThreadRunning() {
 }
 
 void VideoRecorder::OnRecord() {
-    AVCodecContext* codec_ctx = m_stream->codec;
+//    AVCodecContext* codec_ctx = m_stream->codec;
+    AVCodecContext* codec_ctx = m_codec_ctx;
 
     // allocate frame buffer for encoding
     AVFrame* frame = av_frame_alloc();
@@ -133,20 +139,20 @@ void VideoRecorder::OnRecord() {
     frame->height = codec_ctx->height;
     frame->format = static_cast<int>(codec_ctx->pix_fmt);
 
-    int ret = avformat_write_header(m_outctx, NULL);
-    if(ret < 0) {
-        av_frame_free(&frame);
-        avcodec_close(codec_ctx);
+    // int ret = avformat_write_header(m_outctx, NULL);
+    // if(ret < 0) {
+    //     av_frame_free(&frame);
+    //     avcodec_close(codec_ctx);
 
-        avio_close(m_outctx->pb);
-        avformat_free_context(m_outctx);
+    //     avio_close(m_outctx->pb);
+    //     avformat_free_context(m_outctx);
 
-        printf("failed avformat_write_header\n");
-        return;
-    }
+    //     printf("failed avformat_write_header\n");
+    //     return;
+    // }
 
     unsigned nb_frames = 0;
-    int got_pkt = 0;
+//    int got_pkt = 0;
     int startTime = 0;
 
     AVPacket pkt;
@@ -173,8 +179,6 @@ void VideoRecorder::OnRecord() {
 #else
         if(m_recQueue.DeQueue(pFrame)) {
 #endif
-            m_outCount++;
-
             av_image_fill_arrays(frame->data, frame->linesize, (uint8_t*)pFrame->btImg, AV_PIX_FMT_YUV420P, MAX_SIZE_SCREEN, MAX_SIZE_SCREEN, 1);
 
             usleep(1);
@@ -189,27 +193,30 @@ void VideoRecorder::OnRecord() {
             frame->pts = frameOfGap * codec_ctx->time_base.den / 1000;
 
             // encode video frame
-            ret = avcodec_encode_video2(codec_ctx, &pkt, frame, &got_pkt);
-            if(ret < 0) {
-                printf("failed avcodec_encode_video2\n");
-                break;
-            }
+            // ret = avcodec_encode_video2(codec_ctx, &pkt, frame, &got_pkt);
+            // if(ret < 0) {
+            //     printf("failed avcodec_encode_video2\n");
+            //     break;
+            // }
 
-            this_thread::sleep_for( chrono::milliseconds(1) );
+            // this_thread::sleep_for( chrono::milliseconds(1) );
 
-            // rescale packet timestamp
-            pkt.duration = 1;
-            pkt.stream_index = m_stream->index;
+            // // rescale packet timestamp
+            // pkt.duration = 1;
+            // pkt.stream_index = m_stream->index;
 
-            av_packet_rescale_ts(&pkt, codec_ctx->time_base, m_stream->time_base);
+            // av_packet_rescale_ts(&pkt, codec_ctx->time_base, m_stream->time_base);
 
-            usleep(1);
+            // usleep(1);
 
-            // write packet
-            ret = av_write_frame(m_outctx, &pkt);
-            if(ret >= 0) {
-                ++nb_frames;
-            }
+            // // write packet
+            // ret = av_write_frame(m_outctx, &pkt);
+            // if(ret >= 0) {
+            //     ++nb_frames;
+            // }
+
+            Encode(codec_ctx, frame, &pkt);
+            ++nb_frames;
 
             usleep(1);
 
@@ -220,26 +227,39 @@ void VideoRecorder::OnRecord() {
 //        usleep(500);
     }
 
-    printf("RECORDING END : %lld, %lld\n", m_inCount, m_outCount);
+    Encode(codec_ctx, NULL, &pkt);
 
+    printf("[VPS:%d] RECORDING END : %lld, %lld\n", m_nHpNo, m_inCount, m_outCount);
+
+    av_write_trailer(m_outctx);
+
+    printf("[VPS:%d] VideoRecorder::OnRecord >>> 1\n", m_nHpNo);
     if(pFrame != NULL) {
         free(pFrame);
         pFrame = NULL;
+        
+        printf("[VPS:%d] VideoRecorder::OnRecord >>> 2\n", m_nHpNo);
+        if(frame != NULL) {
+            av_frame_free(&frame);
+            frame = NULL;
+        }
+
+        printf("[VPS:%d] VideoRecorder::OnRecord >>> 3\n", m_nHpNo);
+    //    avcodec_close(codec_ctx);
+        if(m_codec_ctx != NULL) {
+            avcodec_free_context(&m_codec_ctx);
+            m_codec_ctx = NULL;
+        }
+
+        printf("[VPS:%d] VideoRecorder::OnRecord >>> 4\n", m_nHpNo);
+        if(m_outctx != NULL) {
+            avio_close(m_outctx->pb);
+            printf("[VPS:%d] VideoRecorder::OnRecord >>> 5\n", m_nHpNo);
+            avformat_free_context(m_outctx);
+            m_outctx = NULL;
+        }
+        printf("[VPS:%d] VideoRecorder::OnRecord >>> 6\n", m_nHpNo);
     }
-
-    printf("[VPS:%d] VideoRecorder::OnRecord >>> 1\n", m_nHpNo);
-    av_write_trailer(m_outctx);
-    printf("[VPS:%d] VideoRecorder::OnRecord >>> 2\n", m_nHpNo);
-
-    av_frame_free(&frame);
-    printf("[VPS:%d] VideoRecorder::OnRecord >>> 3\n", m_nHpNo);
-    avcodec_close(codec_ctx);
-
-    printf("[VPS:%d] VideoRecorder::OnRecord >>> 4\n", m_nHpNo);
-    avio_close(m_outctx->pb);
-    printf("[VPS:%d] VideoRecorder::OnRecord >>> 5\n", m_nHpNo);
-    avformat_free_context(m_outctx);
-    printf("[VPS:%d] VideoRecorder::OnRecord >>> 6\n", m_nHpNo);
 
 #if ENABLE_SHARED_MEMORY
 #else
@@ -250,6 +270,44 @@ void VideoRecorder::OnRecord() {
         m_pStopRoutine(m_nHpNo);
     } else {
         RecordStopAndSend();
+    }
+}
+
+void VideoRecorder::Encode(AVCodecContext* enc_ctx, AVFrame* frame, AVPacket* pkt) {
+    // 인코딩 명령을 내림. 과거 버전에서는 인코딩 명령에서 결과를 받았지만
+    // 최신 버전에서는 명령과 결과 리턴을 따로 처리함 -> 서로 다른 쓰래드에서
+    // 명령을 처리할 수 있는 장점이 있음
+    int ret = avcodec_send_frame(enc_ctx, frame);
+    if(ret < 0) {
+        printf("Error sending a frame for encoding\n");
+        return;
+    }
+
+    while(ret >= 0) {
+        ret = avcodec_receive_packet(enc_ctx, pkt);
+
+        if( ret == AVERROR(EAGAIN) || ret == AVERROR_EOF ) {
+            return;
+        } else if(ret < 0) {
+            printf("Error during encoding\n");
+            break;
+        }
+
+        usleep(1);
+
+        pkt->duration = 1;
+        pkt->stream_index = m_stream->index;
+
+        av_packet_rescale_ts(pkt, enc_ctx->time_base, m_stream->time_base);
+        
+        usleep(1);
+
+        av_write_frame(m_outctx, pkt);
+        m_outCount++;
+
+        usleep(1);
+
+        av_packet_unref(pkt);
     }
 }
 
@@ -272,7 +330,11 @@ bool VideoRecorder::OpenEncoder(char* filePath) {
     // crate video stream
     m_codec = avcodec_find_encoder(m_outctx->oformat->video_codec);
 
+#if 0
     m_stream = avformat_new_stream(m_outctx, m_codec);
+#else
+    m_stream = avformat_new_stream(m_outctx, NULL);
+#endif
     if(!m_stream) {
         avio_close(m_outctx->pb);
         avformat_free_context(m_outctx);
@@ -281,7 +343,17 @@ bool VideoRecorder::OpenEncoder(char* filePath) {
         return false;
     }
 
+#if 0
     AVCodecContext* codec_ctx = m_stream->codec;
+#else
+    m_stream->id = m_outctx->nb_streams - 1;
+    m_codec_ctx = avcodec_alloc_context3(m_codec);
+
+    m_stream->time_base.num = 1;
+    m_stream->time_base.den = 16;
+
+    AVCodecContext* codec_ctx = m_codec_ctx;
+#endif
 
     codec_ctx->width = MAX_SIZE_SCREEN;
     codec_ctx->height = MAX_SIZE_SCREEN;
@@ -312,11 +384,37 @@ bool VideoRecorder::OpenEncoder(char* filePath) {
     // open video encoder
     ret = avcodec_open2(codec_ctx, m_codec, &param);
     if(ret < 0) {
+#if 0
         avcodec_close(codec_ctx);
+#else 
+        avcodec_free_context(&codec_ctx);
+#endif
         avio_close(m_outctx->pb);
         avformat_free_context(m_outctx);
 
         printf("failed avcodec_open2\n");
+        return false;
+    }
+
+    ret = avcodec_parameters_from_context(m_stream->codecpar, codec_ctx);
+    if(ret < 0) {
+        avcodec_free_context(&codec_ctx);
+        avio_close(m_outctx->pb);
+        avformat_free_context(m_outctx);
+
+        printf("failed avcodec_parameters_from_context\n");
+        return false;
+    }
+
+    av_dump_format(m_outctx, 0, filePath, 1);
+
+    ret = avformat_write_header(m_outctx, &param);
+    if(ret < 0) {
+        avcodec_free_context(&codec_ctx);
+        avio_close(m_outctx->pb);
+        avformat_free_context(m_outctx);
+
+        printf("failed avformat_write_header\n");
         return false;
     }
 

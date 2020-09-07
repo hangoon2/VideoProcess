@@ -43,6 +43,8 @@ private:
 
     bool IsCompressTime(double dlCaptureGap);
 
+    void Encode(AVCodecContext* enc_ctx, AVFrame* frame, AVPacket* pkt);
+
 private:
     bool m_isRunning;
 
@@ -70,6 +72,7 @@ private:
     ULONGLONG m_outCount;
 
     AVFormatContext* m_outctx;
+    AVCodecContext* m_codec_ctx;
     AVCodec* m_codec;
     AVStream* m_stream;
     SwsContext* m_swsctx;
