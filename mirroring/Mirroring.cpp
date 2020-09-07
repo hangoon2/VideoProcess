@@ -278,6 +278,13 @@ void Mirroring::HandleJpegPacket(BYTE* pPacket, int iDataLen, short usCmd, int n
     }
 
     if(m_pMirroringRoutine[nHpNo - 1] != NULL) {
+        short l = ntohs( *(short*)&pPacket[16] );
+        short t = ntohs( *(short*)&pPacket[18] );
+        short r = ntohs( *(short*)&pPacket[20] );
+        short b = ntohs( *(short*)&pPacket[22] );
+
+        if(l < 0 || t < 0 || r < 0 || b < 0) return;
+
         m_pMirroringRoutine[nHpNo - 1](pPacket);
     }
 }
