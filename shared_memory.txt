@@ -21,3 +21,9 @@ Kern.sysv.shmall=1024
 
 참조사이트
 => http://www.spy-hill.com/help/apple/SharedMemory.html
+
+testforte.sh 권한
+chmod +x ~/testforte.sh
+
+등록: sudo defaults write com.apple.loginwindow LoginHook /Users/[user]/testforte.sh
+삭제: sudo defaults delete com.apple.loginwindow LoginHook
