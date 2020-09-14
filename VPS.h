@@ -44,8 +44,10 @@ private:
     void CreateSharedMemory();
     void DestroySharedMemory();
 
+#if ENABLE_JAVA_UI
 private:
     NetManager* m_pNetMgr;
+#endif
 
 #if ENABLE_SHARED_MEMORY
     int m_shmid;

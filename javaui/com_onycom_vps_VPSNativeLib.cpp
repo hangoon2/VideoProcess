@@ -4,11 +4,9 @@
 #include <stdio.h>
 #include <unistd.h>
 
-static VPS* gs_pVps = NULL;
-
-static bool gs_isRunnging = true;
-
 #if ENABLE_JAVA_UI
+
+static VPS* gs_pVps = NULL;
 
 /*
  * Class:     com_onycom_vps_VPSNativeLib
@@ -50,8 +48,6 @@ JNIEXPORT void JNICALL Java_com_onycom_vps_VPSNativeLib_Start
 JNIEXPORT void JNICALL Java_com_onycom_vps_VPSNativeLib_Stop
 (JNIEnv *env, jobject object) {
     printf("VPS NATIVE STOP\n");
-    gs_isRunnging = false;
-
     if(gs_pVps != NULL) {
         gs_pVps->Stop();
 
