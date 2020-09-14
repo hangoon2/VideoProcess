@@ -31,6 +31,14 @@ JNIEXPORT void JNICALL Java_com_onycom_vps_VPSNativeLib_Stop
 JNIEXPORT jint JNICALL Java_com_onycom_vps_VPSNativeLib_GetLastScene
   (JNIEnv *, jobject, jint, jbyteArray);
 
+/*
+ * Class:     com_onycom_vps_VPSNativeLib
+ * Method:    GetLastCallback
+ * Signature: 
+ */
+JNIEXPORT jint JNICALL Java_com_onycom_vps_VPSNativeLib_GetLastCallback
+  (JNIEnv *, jobject, jobject);
+
 #ifdef __cplusplus
 }
 #endif
