@@ -8,7 +8,11 @@
 #define MAXCHCNT            10
 #define MAXCLIENT_PER_CH    21  // Host(1) + Guest(20) = 21
 
-#define ENABLE_JAVA_UI          0
+#if TYPE_EXECUTABLE
+    #define ENABLE_JAVA_UI      0
+#else
+    #define ENABLE_JAVA_UI      1
+#endif
 #define ENABLE_NATIVE_UI        0
 #define ENABLE_SHARED_MEMORY    1
 #define ENABLE_MIRRORING_QUEUE  1
